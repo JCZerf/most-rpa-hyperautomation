@@ -1,6 +1,7 @@
 import json
 import logging
 import datetime
+import base64
 from typing import Any, Dict, List
 from playwright.sync_api import sync_playwright
 
@@ -90,6 +91,11 @@ class TransparencyBot:
                     botao_acordeon.click(force=True)
                     btn_detalhar.wait_for(state="visible", timeout=5000)
 
+                # Captura de evidência: Panorama da relação da pessoa com o Governo Federal (base64)
+                panorama_bytes = page.screenshot(full_page=True)
+                panorama_base64 = base64.b64encode(panorama_bytes).decode("utf-8")
+                logger.info("Panorama capturado em base64.")    
+
                 # Captura o valor total da tabela resumo
                 valor_total = page.locator("table#tabela-visao-geral-sancoes tbody tr").first.locator("td").last.inner_text().strip()
 
@@ -129,15 +135,11 @@ class TransparencyBot:
                             "valor": cols.nth(5).inner_text().strip(),
                             "observacao": cols.nth(6).inner_text().strip(),
                         })
-                        # --- Lógica de Nome de Arquivo Dinâmico para Evidência ---
-                nome_limpo = nome.replace(" ", "_").upper()
-                cpf_limpo = cpf.replace(".", "").replace("-", "").replace("*", "")
-                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                
-                nome_evidencia = f"{nome_limpo}_{cpf_limpo}_{ts}.png"
-                caminho_evidencia = f"output/{nome_evidencia}"
-                page.screenshot(path=caminho_evidencia, full_page=True)
-                logger.info(f"Evidência visual salva: {caminho_evidencia}")       
+
+                # Captura de evidência: Tela de detalhes mensais (base64)
+                detalhe_bytes = page.screenshot(full_page=True)
+                detalhe_base64 = base64.b64encode(detalhe_bytes).decode("utf-8")
+                logger.info("Detalhes mensais capturados em base64.")   
 
                 # --- Estruturação do Resultado ---
                 resultado_final = {
@@ -155,7 +157,8 @@ class TransparencyBot:
                     ],
                     "meta": {
                         "resultados_encontrados": quantidade,
-                        "arquivo_evidencia": nome_evidencia
+                        "panorama_relacao": panorama_base64,
+                        "detalhes_mensais": detalhe_base64
                     }
                 }
                 
