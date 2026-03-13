@@ -69,7 +69,7 @@ class TransparencyBot:
                 # Se nenhum benefício encontrado, montar retorno similar ao original
                 if not benefits_data.get("beneficios_encontrados"):
                     return {
-                        "pessoa": {**pessoal, "nis": None},
+                        "pessoa": {**pessoal, "nis": None, "quantidade_beneficios": 0},
                         "beneficios": [],
                         "meta": {
                             "resultados_encontrados": search_result.get("quantidade"),
@@ -81,7 +81,7 @@ class TransparencyBot:
                     }
 
                 resultado_final = {
-                    "pessoa": pessoal,
+                    "pessoa": {**pessoal, "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0)},
                     "beneficios": benefits_data.get("beneficios_resultado"),
                     "meta": {
                         "resultados_encontrados": search_result.get("quantidade"),

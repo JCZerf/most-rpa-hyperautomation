@@ -26,6 +26,9 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
         if page.locator(f"strong:has-text('{b}')").count() > 0:
             beneficios_encontrados.append(b)
 
+    # log resumo inicial de benefícios detectados
+    logger.info(f"Benefícios detectados no painel: {beneficios_encontrados}")
+
     if not beneficios_encontrados:
         agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
         data_consulta = agora.strftime("%d/%m/%Y")
@@ -46,12 +49,16 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
 
     beneficios_resultado: List[Dict[str, Any]] = []
     blocos = page.locator("#accordion-recebimentos-recursos .br-table")
-    for i in range(blocos.count()):
+    total_blocos = blocos.count()
+    logger.info(f"Iniciando extração de {total_blocos} blocos de benefícios.")
+    for i in range(total_blocos):
         bloco = blocos.nth(i)
         try:
             tipo = bloco.locator("strong").inner_text().strip()
         except Exception:
             tipo = bloco.inner_text().strip().split('\n', 1)[0][:50]
+
+        logger.info(f"Extraindo benefício {i+1}/{total_blocos}: {tipo}")
 
         try:
             cols = bloco.locator("table tbody tr td")
@@ -158,6 +165,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     detalhe_evidence_b64 = None
 
+                logger.info(f"Finalizado detalhe para {tipo}: {len(detalhe_parcelas)} parcelas extraídas")
+
                 try:
                     nova_pagina.close()
                 except Exception:
@@ -178,9 +187,12 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     data_consulta = agora.strftime("%d/%m/%Y")
     hora_consulta = agora.strftime("%H:%M")
 
+    quantidade_beneficios = len(beneficios_resultado)
+
     return {
         "beneficios_resultado": beneficios_resultado,
         "beneficios_encontrados": beneficios_encontrados,
+        "quantidade_beneficios": quantidade_beneficios,
         "panorama_base64": panorama_base64,
         "data_consulta": data_consulta,
         "hora_consulta": hora_consulta,
