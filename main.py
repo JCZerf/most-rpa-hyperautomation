@@ -53,7 +53,8 @@ def main():
     lista_alvos = [
         "04031769644",
         "A LIDA PEREIRA FIALHO",
-        "A ANNE CHRISTINE SILVA RIBEIRO" 
+        "A ANNE CHRISTINE SILVA RIBEIRO", 
+        "00000000000",  # Alvo fictício para teste de não encontrado
     ]
 
     # max_workers define quantos navegadores abrirão AO MESMO TEMPO
