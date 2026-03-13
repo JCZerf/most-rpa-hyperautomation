@@ -1,39 +1,74 @@
-# Most RPA Hyperautomation - Transparency Scraper
+# Most RPA Hyperautomation - Transparency Portal Scraper 🚀
 
-Pequeno projeto para extrair dados do Portal da Transparência usando Playwright.
+Projeto de automação robusta desenvolvido para extrair dados detalhados de beneficiários do Auxílio Emergencial diretamente do **Portal da Transparência do Governo Federal**. Esta solução foi projetada com foco em resiliência, contornando bloqueios de segurança e garantindo a integridade dos dados extraídos.
 
-## Pré-requisitos
+## 🛠️ Tecnologias e Técnicas Aplicadas
 
-- Python 3.8+ (venv recomendado)
-- Dependências no `requirements.txt`
-- Playwright browsers instalados
+- **Playwright (Python):** Motor de automação de alta performance para interação com páginas dinâmicas.
+- **Evasão de Detecção (Anti-Bot):** Implementação de técnicas avançadas para evitar CAPTCHAs e bloqueios de firewall, incluindo o mascaramento da flag `navigator.webdriver`, uso de User-Agents reais e emulação de fuso horário/localidade.
+- **Mapeamento Estruturado:** Extração completa de 7 colunas de detalhes (Mês de Disponibilização, Parcela, UF, Município, Enquadramento, Valor e Observações).
+- **Sincronismo de Dados:** Tratamento de latência e carregamento assíncrono (AJAX) para garantir que o bot não capture tabelas vazias.
+- **Logging Profissional:** Monitoramento detalhado de cada etapa do processo via console e arquivo de log.
+- **Evidência Visual:** Geração automática de screenshots da extração como prova de execução (audit trail).
 
-## Instalação rápida
+## 📋 Pré-requisitos
+
+- **Python 3.8+** (Recomendado Python 3.12)
+- Navegador **Chromium** (gerenciado pelo Playwright)
+- Ambiente Linux (Testado em Ubuntu/WSL) ou Windows
+
+## 🚀 Instalação e Configuração
 
 ```bash
+# 1. Criar o ambiente virtual e ativar
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # No Windows use: venv\Scripts\activate
+
+# 2. Instalar dependências
 pip install -r requirements.txt
-# Instala navegadores do Playwright
-playwright install
-```
 
-## Execução
+# 3. Instalar o motor do navegador
+playwright install chromium
 
-O script principal é `main.py`. Ele executa o bot e grava um JSON com os dados extraídos em `output/`.
+🤖 Execução
+Para iniciar a automação, execute o script principal:
 
-```bash
-python main.py
-```
+Nota: Por padrão, o bot inicia com headless=False para visualização da interface. Para execução em background (servidores), altere a instância para TransparencyBot(headless=True) no arquivo main.py.
 
-Por padrão o bot roda com `headless=False` (abre janela). Para rodar em background, altere `TransparencyBot(headless=False)` para `TransparencyBot(headless=True)` em `main.py`.
+📂 Estrutura de Saída (Output)
+O bot organiza os resultados na pasta output/ gerando os seguintes arquivos:
 
-## Arquivo de saída
+JSON de Dados: result_TIMESTAMP.json - Contém o perfil completo do beneficiário, metadados da busca e a lista detalhada de todas as parcelas encontradas.
 
-O arquivo gerado fica em `output/` com o nome formatado como: `nome_cpf_localidade.json` (partes foram sanitizadas; `cpf` fica apenas com dígitos).
+Evidência Visual: evidencia_sucesso.png - Captura de tela da página de detalhamento, comprovando a veracidade dos dados extraídos.
 
-Exemplo:
+Exemplo do JSON Gerado:
+JSON
 
-```
-output/A_ANNE_CHRISTINE_SILVA_RIBEIRO_734995_PROPIA-SE.json
-```
+{
+  "pessoa": {
+    "nome": "A ANNE CHRISTINE SILVA RIBEIRO",
+    "cpf": "***.734.995-**",
+    "localidade": "PROPRIÁ - SE"
+  },
+  "beneficios": [
+    {
+      "tipo": "Auxílio Emergencial",
+      "valor_total": "R$ 3.900,00",
+      "parcelas": [
+        {
+          "mes": "12/2020",
+          "parcela": "8",
+          "uf": "BA",
+          "municipio": "POJUCA",
+          "enquadramento": "EXTRACAD",
+          "valor": "300,00",
+          "observacao": "NÃO HÁ"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "resultados_encontrados": 86
+  }
+}
