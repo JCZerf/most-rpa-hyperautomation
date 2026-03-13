@@ -2,12 +2,13 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from bot.scraper import TransparencyBot
 
-# Configura o logging para mostrar data, hora e o nível da mensagem
+# Configuração do logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("bot_execution.log", encoding="utf-8")
@@ -15,36 +16,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
-    logger.info("Iniciando o processo de automação...")
+def executar_para_alvo(identificador_alvo):
+    """Função que será executada em paralelo para cada CPF/Nome."""
+    logger.info(f"Iniciando thread para o alvo: {identificador_alvo}")
     
-    # Instancia o bot. 
+    # Instancia o bot em modo headless conforme o desafio pede
     bot = TransparencyBot(headless=True)
+    bot.alvo = identificador_alvo # Atribui o alvo dinamicamente
     
     try:
-        # Executa a raspagem
         resultado = bot.run()
         
-        if not resultado or "error" in resultado:
-            logger.error("A automação falhou ou não retornou dados válidos.")
-            return
-
-        # Define diretórios e nomes de arquivos usando Pathlib de forma robusta
+        # Salva o resultado individualmente
         out_dir = Path("output")
         out_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Opcional: Adiciona timestamp no nome do arquivo para não sobrescrever resultados anteriores
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_file = out_dir / f"result_{timestamp}.json"
         
-        # Salva o JSON
+        # Nome do arquivo inclui o alvo para facilitar identificação
+        nome_limpo = str(identificador_alvo).replace(".", "").replace("-", "")
+        out_file = out_dir / f"result_{nome_limpo}_{timestamp}.json"
+        
         with out_file.open("w", encoding="utf-8") as f:
             json.dump(resultado, f, ensure_ascii=False, indent=4)
-        
-        logger.info(f"Dados salvos com sucesso em: {out_file}")
+            
+        logger.info(f"Sucesso: {identificador_alvo} -> {out_file.name}")
+        return resultado
 
     except Exception as e:
-        logger.critical(f"Erro inesperado na função principal: {e}", exc_info=True)
+        logger.error(f"Falha crítica no alvo {identificador_alvo}: {e}")
+        return {"alvo": identificador_alvo, "error": str(e)}
+
+def main():
+    logger.info("--- Iniciando Hyperautomation Most RPA ---")
+    
+    # LISTA DE ALVOS PARA EXECUÇÃO SIMULTÂNEA
+    lista_alvos = [
+        "04031769644",
+        "A LIDA PEREIRA FIALHO",
+        "A ANNE CHRISTINE SILVA RIBEIRO" 
+    ]
+
+    # max_workers define quantos navegadores abrirão AO MESMO TEMPO
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        executor.map(executar_para_alvo, lista_alvos)
+
+    logger.info("--- Todas as execuções foram finalizadas ---")
 
 if __name__ == "__main__":
     main()
