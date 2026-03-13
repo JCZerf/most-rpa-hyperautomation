@@ -12,9 +12,14 @@ import json
 import logging
 from typing import List, Dict, Any
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.views.decorators.csrf import csrf_exempt
+
+from rest_framework.decorators import api_view
+from rest_framework.request import Request
 
 from bot.scraper import TransparencyBot
+
+from drf_spectacular.utils import extend_schema, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +32,26 @@ def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
     return resultado
 
 
-@csrf_exempt
-def consulta(request):
-    if request.method != 'POST':
-        return HttpResponseBadRequest('Use POST with JSON body {"consulta": "..., "refine": true|false} or batch formats')
-
-    try:
-        payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
-        return HttpResponseBadRequest('Invalid JSON')
+@extend_schema(
+    methods=['POST'],
+    description=(
+        'Executa a consulta no TransparencyBot. Suporta 3 formatos de payload:\n'
+        '- Single: {"consulta":"...","refine":false}\n'
+        '- Batch simples: {"consultas":["...","..."],"refine":false}\n'
+        '- Batch avançado: {"itens":[{"consulta":"...","refine":false}, ...]}'
+    ),
+    examples=[
+        OpenApiExample('Single', value={"consulta": "04031769644", "refine": False}, request_only=True, media_type='application/json'),
+        OpenApiExample('Batch simples', value={"consultas": ["04031769644", "12345678901"], "refine": False}, request_only=True, media_type='application/json'),
+        OpenApiExample('Batch avançado', value={"itens": [{"consulta": "04031769644", "refine": False}, {"consulta": "12345678901", "refine": True}]}, request_only=True, media_type='application/json'),
+    ],
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)
+@api_view(['POST'])
+def consulta(request: Request):
+    # request is a DRF Request; use request.data for parsed JSON
+    payload = request.data if isinstance(request.data, dict) else {}
 
     # Detect batch formats
     # 1) { "consultas": ["cpf1","cpf2"], "refine": false }

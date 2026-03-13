@@ -9,9 +9,12 @@ ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+    'django.contrib.sessions',
     'rest_framework',
     'api',
-        'drf_spectacular',
+    'drf_spectacular',
 ]
 
 REST_FRAMEWORK = {
@@ -25,12 +28,28 @@ SPECTACULAR_SETTINGS = {
     }
 
 MIDDLEWARE = [
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.common.CommonMiddleware',
 ]
 
 ROOT_URLCONF = 'web.urls'
 
-TEMPLATES = []
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    }
+]
 
 WSGI_APPLICATION = 'web.wsgi.application'
 
