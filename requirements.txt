@@ -1,2 +1,5 @@
 playwright>=1.42.0
 tzdata
+djangorestframework==3.16.1
+djangorestframework==3.16.1
+drf-spectacular==0.29.0
