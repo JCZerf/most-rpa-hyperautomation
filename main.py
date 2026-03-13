@@ -19,7 +19,6 @@ def main():
     logger.info("Iniciando o processo de automação...")
     
     # Instancia o bot. 
-    # Dica: Você pode passar o headless via variável de ambiente ou argumento no futuro
     bot = TransparencyBot(headless=True)
     
     try:
