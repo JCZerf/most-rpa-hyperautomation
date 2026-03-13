@@ -1,74 +1,119 @@
-# Most RPA Hyperautomation - Transparency Portal Scraper 🚀
+# most-rpa-hyperautomation
 
-Projeto de automação robusta desenvolvido para extrair dados detalhados de beneficiários do Auxílio Emergencial diretamente do **Portal da Transparência do Governo Federal**. Esta solução foi projetada com foco em resiliência, contornando bloqueios de segurança e garantindo a integridade dos dados extraídos.
+Uma automação de raspagem com Playwright (Python) para consultar o Portal da Transparência do Governo Federal e extrair informações sobre benefícios sociais (por exemplo: Auxílio Brasil, Bolsa Família, Auxílio Emergencial). O projeto captura evidências (screenshots em Base64) e gera um JSON estruturado com os resultados.
 
-## 🛠️ Tecnologias e Técnicas Aplicadas
+**Principais componentes:** código do bot em [bot/scraper.py](bot/scraper.py), um simples runner em `main.py` e uma pasta `output/` para gravar resultados.
 
-- **Playwright (Python):** Motor de automação de alta performance para interação com páginas dinâmicas.
-- **Evasão de Detecção (Anti-Bot):** Implementação de técnicas avançadas para evitar CAPTCHAs e bloqueios de firewall, incluindo o mascaramento da flag `navigator.webdriver`, uso de User-Agents reais e emulação de fuso horário/localidade.
-- **Mapeamento Estruturado:** Extração completa de 7 colunas de detalhes (Mês de Disponibilização, Parcela, UF, Município, Enquadramento, Valor e Observações).
-- **Sincronismo de Dados:** Tratamento de latência e carregamento assíncrono (AJAX) para garantir que o bot não capture tabelas vazias.
-- **Logging Profissional:** Monitoramento detalhado de cada etapa do processo via console e arquivo de log.
-- **Evidência Visual:** Geração automática de screenshots da extração como prova de execução (audit trail).
+**Status:** funcional para consultas individuais; opções para execução em lote via `main.py`.
 
-## 📋 Pré-requisitos
+## Recursos
 
-- **Python 3.8+** (Recomendado Python 3.12)
-- Navegador **Chromium** (gerenciado pelo Playwright)
-- Ambiente Linux (Testado em Ubuntu/WSL) ou Windows
+- Playwright (Python) para controle de navegador e extração robusta de SPAs.
+- Captura de evidência em Base64 embutida no JSON de saída.
+- Detecção e extração de tabelas de detalhe para diferentes benefícios.
+- Configurações para `headless`, fuso-horário e user-agent.
 
-## 🚀 Instalação e Configuração
+## Requisitos
+
+- Python 3.10+ (testado em Linux)
+- Virtualenv (recomendado)
+- Dependências Python listadas em `requirements.txt`
+- Playwright browsers instalados (`playwright install`)
+
+## Instalação rápida
+
+1. Criar e ativar um ambiente virtual
 
 ```bash
-# 1. Criar o ambiente virtual e ativar
 python -m venv venv
-source venv/bin/activate  # No Windows use: venv\Scripts\activate
+source venv/bin/activate
+```
 
-# 2. Instalar dependências
+2. Instalar dependências
+
+```bash
 pip install -r requirements.txt
+```
 
-# 3. Instalar o motor do navegador
-playwright install chromium
+3. Instalar browsers do Playwright
 
-🤖 Execução
-Para iniciar a automação, execute o script principal:
+```bash
+playwright install
+```
 
-Nota: Por padrão, o bot inicia com headless=False para visualização da interface. Para execução em background (servidores), altere a instância para TransparencyBot(headless=True) no arquivo main.py.
+OBS: Em distribuições Linux sem interface, pode ser necessário instalar bibliotecas do sistema para o Chromium (por exemplo: `libnss3`, `libatk1.0-0`, `libgtk-3-0`, etc.).
 
-📂 Estrutura de Saída (Output)
-O bot organiza os resultados na pasta output/ gerando os seguintes arquivos:
+## Uso
 
-JSON de Dados: result_TIMESTAMP.json - Contém o perfil completo do beneficiário, metadados da busca e a lista detalhada de todas as parcelas encontradas.
+Há duas formas comuns de usar o bot:
 
-Evidência Visual: evidencia_sucesso.png - Captura de tela da página de detalhamento, comprovando a veracidade dos dados extraídos.
+- Via `main.py` (execução em lote ou runner fornecido).
+- Importando `TransparencyBot` e executando manualmente.
 
-Exemplo do JSON Gerado:
-JSON
+Exemplo mínimo para testar diretamente no REPL ou num script:
 
+```python
+from bot.scraper import TransparencyBot
+import json
+
+bot = TransparencyBot(headless=True)
+bot.alvo = "04031769644"  # CPF ou NIS ou Nome
+resultado = bot.run()
+print(json.dumps(resultado, ensure_ascii=False, indent=2))
+```
+
+Para rodar `main.py`, abra e ajuste a lista de alvos conforme necessário, então execute:
+
+```bash
+python main.py
+```
+
+Os resultados podem ser gravados em `output/` dependendo de como `main.py` está implementado.
+
+## Configuração e parâmetros relevantes
+
+- `TransparencyBot(headless: bool = True)` — executar em modo headless por padrão.
+- `bot.alvo` — string com CPF, NIS ou nome para busca.
+- `bot.usar_refine` — `True` para busca refinada (fluxo alternativo), `False` para busca simples (lupa).
+
+Se desejar parametrizar via CLI, crie um wrapper simples em `main.py` que aceite argumentos e instancie `TransparencyBot` dinamicamente.
+
+## Estrutura de saída (resumo)
+
+O JSON retornado segue um formato aproximado:
+
+- `pessoa`: metadados (`nome`, `cpf`, `localidade`, `nis`)
+- `beneficios`: lista de objetos com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64) e `parcelas` (lista de registros)
+- `meta`: dados da execução (`resultados_encontrados`, `beneficios_encontrados`, `data_consulta`, `hora_consulta`)
+
+Exemplo (resumido):
+
+```json
 {
-  "pessoa": {
-    "nome": "A ANNE CHRISTINE SILVA RIBEIRO",
-    "cpf": "***.734.995-**",
-    "localidade": "PROPRIÁ - SE"
-  },
-  "beneficios": [
-    {
-      "tipo": "Auxílio Emergencial",
-      "valor_total": "R$ 3.900,00",
-      "parcelas": [
-        {
-          "mes": "12/2020",
-          "parcela": "8",
-          "uf": "BA",
-          "municipio": "POJUCA",
-          "enquadramento": "EXTRACAD",
-          "valor": "300,00",
-          "observacao": "NÃO HÁ"
-        }
-      ]
-    }
-  ],
-  "meta": {
-    "resultados_encontrados": 86
-  }
+  "pessoa": { "nome": "...", "cpf": "..." },
+  "beneficios": [ { "tipo": "Auxílio Brasil", "parcelas": [...] } ],
+  "meta": { "data_consulta": "12/03/2026" }
 }
+```
+
+## Troubleshooting
+
+- Se o Playwright falhar ao lançar o Chromium em Linux, verifique dependências do sistema e execute `playwright install` novamente.
+- Se encontrar bloqueios anti-bot, `bot/scraper.py` já tenta mascarar automação (user-agent, desativar webdriver, args como `--disable-blink-features=AutomationControlled`). Ajustes adicionais podem ser necessários dependendo do ambiente.
+- Timeout de seletores: aumente os tempos (`wait_for_selector`, `wait_for_timeout`) se a conexão estiver lenta.
+
+## Segurança e ética
+
+Use este projeto apenas para fins legais e éticos. Respeite termos de uso do site alvo e a legislação local sobre proteção de dados.
+
+## Contribuição
+
+Pull requests são bem-vindos. Para mudanças maiores, abra uma issue descrevendo a proposta.
+
+## Licença
+
+Este repositório não especifica uma licença. Adicione uma licença apropriada se pretende compartilhar publicamente.
+
+---
+
+Arquivo principal do bot: [bot/scraper.py](bot/scraper.py)
