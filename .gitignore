@@ -42,10 +42,12 @@ Thumbs.db
 # Output data
 output/
 
+# Django default SQLite database
+db.sqlite3
+
 # Environment variables / secrets
 .env
 *.env
 
 # Logs
 *.log
-
