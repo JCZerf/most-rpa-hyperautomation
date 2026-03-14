@@ -47,13 +47,12 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
+          memory: 1Gi
+          cpu: 1
+          timeout: 60s
+          concurrency: 10
           env_vars: |
-            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
-            DEBUG=False
-            API_TOKEN_TTL=600
-            OAUTH_CLIENT_ID=${{ secrets.OAUTH_CLIENT_ID }}
-            OAUTH_CLIENT_SECRET=${{ secrets.OAUTH_CLIENT_SECRET }}
-            OAUTH_AUDIENCE=most-rpa-api
-            ALLOWED_HOSTS=.run.app,localhost,127.0.0.1
+            ^|^DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}|DEBUG=False|API_TOKEN_TTL=600|OAUTH_CLIENT_ID=${{ secrets.OAUTH_CLIENT_ID }}|OAUTH_CLIENT_SECRET=${{ secrets.OAUTH_CLIENT_SECRET }}|OAUTH_AUDIENCE=most-rpa-api|ALLOWED_HOSTS=.run.app,localhost,127.0.0.1
+          allow-unauthenticated: true
 
       - run: echo ${{ steps.deploy.outputs.url }}
