@@ -90,6 +90,12 @@ Payloads aceitos:
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
+## Documentação do desafio
+- Contexto: [doc/01-documentação-de-contexto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/01-documentação-de-contexto.md)
+- Requisitos: [doc/02-requisito-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/02-requisito-do-projeto.md)
+- Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
+- Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
+
 ### Formato das respostas da API
 
 #### 1) Consulta única com sucesso (`200 OK`)
@@ -233,7 +239,7 @@ E2E_REQUIRE_SUCCESS=true \
   - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA`.
 
 ### Evidência E2E validada
-- Execução pós-deploy aprovada (run `23096919987`): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
+- Execução pós-deploy aprovada em **14/03/2026** (run `23096919987`): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
 - Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
 - Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
 

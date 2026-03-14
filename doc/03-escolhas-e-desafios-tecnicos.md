@@ -66,3 +66,4 @@
 ## Decisões de escopo para o desafio
 - O fluxo foi implementado para atender o caminho de navegação esperado no enunciado, priorizando aderência ao desafio sobre otimizações agressivas de atalho de rota.
 - A navegação completa em todas as abas de detalhe não foi implementada nesta versão por decisão consciente de escopo, direcionando esforço para robustez da API, autenticação, evidências e estabilidade de execução.
+- Na API, o parâmetro oficial de refinamento ficou padronizado como `refinar_busca` (com suporte legado a `refine` para evitar quebra de clientes antigos).

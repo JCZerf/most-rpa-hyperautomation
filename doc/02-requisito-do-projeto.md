@@ -57,3 +57,4 @@
 - Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada.
 - Configuração por variáveis de ambiente (`DJANGO_SECRET_KEY`, `API_MASTER_KEY`, `ALLOWED_HOSTS`, `API_TOKEN_TTL`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `OAUTH_AUDIENCE`).
 - Batch com até 3 entradas por requisição; paralelismo operacional configurável por ambiente (conservador em produção para estabilidade).
+- Nome de campo de API padronizado para `refinar_busca` (mantendo `refine` apenas por compatibilidade retroativa).
