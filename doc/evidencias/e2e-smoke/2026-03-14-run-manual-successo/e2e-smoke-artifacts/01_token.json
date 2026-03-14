@@ -1,0 +1,9 @@
+{
+  "timestamp_utc": "2026-03-14T22:41:01.145983+00:00",
+  "status_code": 200,
+  "body": {
+    "expires_in": 600,
+    "token_type": "Bearer",
+    "scope": "bot:read"
+  }
+}
