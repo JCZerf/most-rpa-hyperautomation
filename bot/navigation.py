@@ -25,8 +25,20 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
 
     if usar_refine:
         logger.info("Fluxo: Busca Refinada selecionado.")
-        page.get_by_role("button", name="Refine a Busca").click()
-        page.locator("#box-busca-refinada").get_by_text("Beneficiário de Programa").click()
+        refine_button = page.get_by_role("button", name="Refine a Busca")
+        refine_button.click()
+
+        box_refine = page.locator("#box-busca-refinada")
+        box_refine.wait_for(state="visible", timeout=10000)
+
+        # O label pode aparecer com variação de texto ou estar fora da área visível.
+        # Marcamos direto o checkbox com fallback forçado para evitar timeout intermitente.
+        filtro_beneficiario = page.locator("#beneficiarioProgramaSocial")
+        try:
+            filtro_beneficiario.check(timeout=5000)
+        except Exception:
+            filtro_beneficiario.check(force=True, timeout=5000)
+
         page.locator("#btnConsultarPF").click()
     else:
         logger.info("Fluxo: Busca Simples (Lupa) selecionado.")

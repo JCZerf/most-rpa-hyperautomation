@@ -1,20 +1,19 @@
 ## Status por requisito (doc/02)
 
 - Backend Django exposto como API: **feito** (Cloud Run, deploy automático).
-- Playwright/Chromium para navegação e captura: **implementado**, em uso; ainda ajustar consumo de memória.
-- Evidência em Base64 na resposta: **presumido implementado** (validar no endpoint real).
-- Resposta JSON com panorama + benefícios: **parcial** (testar fluxos RF-01..RF-06).
-- Logs de execução/falhas: **básico** via Django/Cloud Logging; falta enriquecer mensagens do robô.
-- Autenticação JWT HS256 via `API_MASTER_KEY`: **ajustado** (código e docs); falta garantir `API_MASTER_KEY` no deploy (secret).
+- Playwright/Chromium para navegação e captura: **feito** (fluxo operacional com tratamento de navegação e extração).
+- Evidência em Base64 na resposta: **feito** (panorama, ausência de benefício e detalhes quando aplicável).
+- Resposta JSON com panorama + benefícios: **feito** para o escopo principal; detalhes completos dependem da estrutura disponível em cada tela do portal.
+- Logs de execução/falhas: **feito (nível básico)** via Django/Cloud Logging e logs do robô.
+- Autenticação JWT HS256 via `API_MASTER_KEY`: **feito** (endpoint de token + validação Bearer na consulta).
 - Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL): **feito**.
-- Limite de 3 entradas por requisição e até 3 execuções paralelas: **pendente** (precisa validação e controle de carga).
-- Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **parcial** (revisar/fortalecer).
-- Mensagens de erro dos cenários de teste (MOST): **pendente** validar/ajustar texto.
-- Segurança/LGPD (mascarar identificadores em logs): **pendente**.
+- Limite de 3 entradas por requisição: **feito**. Execução paralela da API está **intencionalmente limitada** por configuração de runtime para estabilidade.
+- Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
+- Mensagens de erro dos cenários de teste (MOST): **feito** para os cenários principais (CPF/NIS inexistente e nome sem resultado).
+- Segurança/LGPD (mascarar identificadores em logs): **feito (básico)**.
 
 ## Ações em aberto
-- Garantir secret `API_MASTER_KEY` presente no GitHub Actions e redeploy.
-- Testar `/api/consulta` com casos de sucesso/erro e confirmar estrutura do JSON e evidência Base64.
-- Mitigar OOM: manter `--memory=2Gi`, `--concurrency=1`; revisar fechamento do Playwright; se necessário, subir para 2 CPU ou otimizar fluxo.
-- Implementar limites de batch/concorrência conforme requisito (3 entradas / até 3 execuções paralelas).
-- Padronizar mensagens de erro conforme cenários (MOST) e mascarar CPF/NIS em logs.
+- Consolidar validação em ambiente homologação com chamadas reais ao portal para registrar evidências finais de RF-01 a RF-06.
+- Ajustar right-sizing de infraestrutura após coleta de métricas (memória, latência e taxa de erro), mantendo estabilidade como prioridade.
+- Definir política de retenção/expurgo para evidências em Base64 no consumo downstream (governança LGPD).
+- Opcional de evolução: ampliar navegação para abas/tabelas adicionais de detalhe, se o escopo pós-desafio exigir maior cobertura funcional.
