@@ -1,119 +1,74 @@
 # most-rpa-hyperautomation
 
-Uma automação de raspagem com Playwright (Python) para consultar o Portal da Transparência do Governo Federal e extrair informações sobre benefícios sociais (por exemplo: Auxílio Brasil, Bolsa Família, Auxílio Emergencial). O projeto captura evidências (screenshots em Base64) e gera um JSON estruturado com os resultados.
+Automação RPA/hiperautomação em Python que consulta o Portal da Transparência (consulta “Pessoas Físicas e Jurídicas”), extrai panorama e detalhes de benefícios sociais (Auxílio Brasil, Bolsa Família, Auxílio Emergencial), captura evidências em Base64 e retorna tudo em JSON.
 
-**Principais componentes:** código do bot em [bot/scraper.py](bot/scraper.py), um simples runner em `main.py` e uma pasta `output/` para gravar resultados.
+Principais modos de uso:
+- **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
+- **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
 
-**Status:** funcional para consultas individuais; opções para execução em lote via `main.py`.
-
-## Recursos
-
-- Playwright (Python) para controle de navegador e extração robusta de SPAs.
-- Captura de evidência em Base64 embutida no JSON de saída.
-- Detecção e extração de tabelas de detalhe para diferentes benefícios.
-- Configurações para `headless`, fuso-horário e user-agent.
+## Stack e componentes
+- Playwright (Python) para navegação e scraping.
+- Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
+- Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
+- `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
 
 ## Requisitos
-
 - Python 3.10+ (testado em Linux)
-- Virtualenv (recomendado)
-- Dependências Python listadas em `requirements.txt`
-- Playwright browsers instalados (`playwright install`)
+- `pip install -r requirements.txt`
+- Browsers do Playwright instalados: `playwright install`  
+  (em Linux headless pode precisar de libs do Chromium: `libnss3`, `libatk1.0-0`, `libgtk-3-0`, etc.)
 
 ## Instalação rápida
-
-1. Criar e ativar um ambiente virtual
-
 ```bash
 python -m venv venv
 source venv/bin/activate
-```
-
-2. Instalar dependências
-
-```bash
 pip install -r requirements.txt
-```
-
-3. Instalar browsers do Playwright
-
-```bash
 playwright install
+cp example.env .env   # ajuste os valores reais
 ```
 
-OBS: Em distribuições Linux sem interface, pode ser necessário instalar bibliotecas do sistema para o Chromium (por exemplo: `libnss3`, `libatk1.0-0`, `libgtk-3-0`, etc.).
-
-## Uso
-
-Há duas formas comuns de usar o bot:
-
-- Via `main.py` (execução em lote ou runner fornecido).
-- Importando `TransparencyBot` e executando manualmente.
-
-Exemplo mínimo para testar diretamente no REPL ou num script:
-
-```python
-from bot.scraper import TransparencyBot
-import json
-
-bot = TransparencyBot(headless=True)
-bot.alvo = "04031769644"  # CPF ou NIS ou Nome
-resultado = bot.run()
-print(json.dumps(resultado, ensure_ascii=False, indent=2))
+## Executar como API (Django)
+```bash
+python manage.py runserver 8000
 ```
+- Documentação interativa (Swagger): `http://127.0.0.1:8000/api/docs/`
+- Esquema OpenAPI (YAML/JSON): `http://127.0.0.1:8000/api/schema/`
+- Autorização: obtenha um token de acesso em `POST /api/token/` enviando sua `api_key`; use o token retornado no header `Authorization: Bearer <token>`. Tokens expiram após o TTL configurado.
 
-Para rodar `main.py`, abra e ajuste a lista de alvos conforme necessário, então execute:
+### Autenticação
+- Obtenha um **JWT** curto em `POST /api/token/` enviando `{"api_key": "<sua-chave>"}` (configurada em `.env` via `API_MASTER_KEY`).
+- Use o token retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens são assinados com HS256 e expiram após `API_TOKEN_TTL` segundos.
 
+### Endpoint principal
+`POST /api/consulta/`
+
+Payloads aceitos:
+- **Single**: `{"consulta": "04031769644", "refine": false}`
+- **Batch simples**: `{"consultas": ["04031769644", "12345678901"], "refine": false}` (máx. 3 entradas)
+- **Batch avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refine": false}]}` (máx. 3 itens; `refine` padrão = true)
+
+Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
+
+## Executar via runner local
+Edite a lista `lista_alvos` em `main.py` e rode:
 ```bash
 python main.py
 ```
+Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até 3 alvos por execução.
 
-Os resultados podem ser gravados em `output/` dependendo de como `main.py` está implementado.
-
-## Configuração e parâmetros relevantes
-
-- `TransparencyBot(headless: bool = True)` — executar em modo headless por padrão.
-- `bot.alvo` — string com CPF, NIS ou nome para busca.
-- `bot.usar_refine` — `True` para busca refinada (fluxo alternativo), `False` para busca simples (lupa).
-
-Se desejar parametrizar via CLI, crie um wrapper simples em `main.py` que aceite argumentos e instancie `TransparencyBot` dinamicamente.
+## Parâmetros importantes
+- `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
+- `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 
 ## Estrutura de saída (resumo)
+- `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
+- `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
+- `meta`: `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64), `data_consulta`, `hora_consulta`.
 
-O JSON retornado segue um formato aproximado:
+## Boas práticas e troubleshooting
+- Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
+- Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
+- Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
 
-- `pessoa`: metadados (`nome`, `cpf`, `localidade`, `nis`)
-- `beneficios`: lista de objetos com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64) e `parcelas` (lista de registros)
-- `meta`: dados da execução (`resultados_encontrados`, `beneficios_encontrados`, `data_consulta`, `hora_consulta`)
-
-Exemplo (resumido):
-
-```json
-{
-  "pessoa": { "nome": "...", "cpf": "..." },
-  "beneficios": [ { "tipo": "Auxílio Brasil", "parcelas": [...] } ],
-  "meta": { "data_consulta": "12/03/2026" }
-}
-```
-
-## Troubleshooting
-
-- Se o Playwright falhar ao lançar o Chromium em Linux, verifique dependências do sistema e execute `playwright install` novamente.
-- Se encontrar bloqueios anti-bot, `bot/scraper.py` já tenta mascarar automação (user-agent, desativar webdriver, args como `--disable-blink-features=AutomationControlled`). Ajustes adicionais podem ser necessários dependendo do ambiente.
-- Timeout de seletores: aumente os tempos (`wait_for_selector`, `wait_for_timeout`) se a conexão estiver lenta.
-
-## Segurança e ética
-
-Use este projeto apenas para fins legais e éticos. Respeite termos de uso do site alvo e a legislação local sobre proteção de dados.
-
-## Contribuição
-
-Pull requests são bem-vindos. Para mudanças maiores, abra uma issue descrevendo a proposta.
-
-## Licença
-
-Este repositório não especifica uma licença. Adicione uma licença apropriada se pretende compartilhar publicamente.
-
----
-
-Arquivo principal do bot: [bot/scraper.py](bot/scraper.py)
+## Segurança
+Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
