@@ -229,6 +229,10 @@ E2E_CONSULTA_BASE=... \
 - Configure os secrets do repositório:
   - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA` (opcional).
 
+### Evidência E2E validada
+- Execução pós-deploy aprovada (run `23096919987`): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
+- Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
+
 ## Estrutura de saída (resumo)
 - `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).

@@ -4,8 +4,8 @@
 - Geração de evidência (screenshot) convertida para Base64 e embutida na resposta.
 - Estrutura de resposta em JSON contendo panorama, detalhes de benefícios e imagem.
 - Logs de execução e falhas registrados pelo serviço Django.
-- Autenticação via JWT (HS256) emitido a partir de uma `api_key` (API_MASTER_KEY) e configurado por variáveis de ambiente.
-- Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL do token).
+- Execução em modo headless com suporte a execuções simultâneas.
+- Se API online for disponibilizada, documentação via Swagger/OpenAPI é diferencial.
 
 ## Requisitos funcionais (MoSCoW)
 | ID | Descrição | Prioridade (MoSCoW) |
@@ -52,3 +52,8 @@
   - `401`: token ausente, inválido ou expirado.
   - `403`: escopo insuficiente.
   - `500`: falha inesperada no processamento.
+
+## Decisões de implementação deste projeto
+- Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada.
+- Configuração por variáveis de ambiente (`DJANGO_SECRET_KEY`, `API_MASTER_KEY`, `ALLOWED_HOSTS`, `API_TOKEN_TTL`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `OAUTH_AUDIENCE`).
+- Batch com até 3 entradas por requisição; paralelismo operacional configurável por ambiente (conservador em produção para estabilidade).
