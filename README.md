@@ -26,6 +26,7 @@ pip install -r requirements.txt
 playwright install
 cp example.env .env   # ajuste os valores reais
 ```
+> Em produção (Render ou similar), ajuste `ALLOWED_HOSTS` para incluir o domínio do serviço (ex.: `most-rpa-hyperautomation.onrender.com` ou `*.onrender.com`).
 
 ## Deploy com Docker (local)
 ```bash
