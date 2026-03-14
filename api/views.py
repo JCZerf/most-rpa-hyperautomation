@@ -251,7 +251,7 @@ def consulta(request: Request):
             "scope": serializers.CharField(),
         },
     ),
-    auth=None,
+    auth=[],
 )
 @api_view(['POST'])
 def token(request: Request):
