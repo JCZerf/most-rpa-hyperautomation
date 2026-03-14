@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -95,34 +96,69 @@ def test_e2e_smoke_consulta_simples_e_refinada():
 
     access_token = token_body["access_token"]
 
-    status_false, body_false = _post_json(
-        f"{base_url}/api/consulta/",
-        {"consulta": consulta_base, "refinar_busca": False},
-        token=access_token,
-    )
+    start_false = datetime.now(timezone.utc)
+    start_true = datetime.now(timezone.utc)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_false = executor.submit(
+            _post_json,
+            f"{base_url}/api/consulta/",
+            {"consulta": consulta_base, "refinar_busca": False},
+            access_token,
+        )
+        future_true = executor.submit(
+            _post_json,
+            f"{base_url}/api/consulta/",
+            {"consulta": consulta_refinada, "refinar_busca": True},
+            access_token,
+        )
+        status_false, body_false = future_false.result()
+        end_false = datetime.now(timezone.utc)
+        status_true, body_true = future_true.result()
+        end_true = datetime.now(timezone.utc)
+
     _save_artifact(
         "02_consulta_refinar_false",
         {
-            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "timestamp_utc_inicio": start_false.isoformat(),
+            "timestamp_utc_fim": end_false.isoformat(),
+            "duracao_ms": int((end_false - start_false).total_seconds() * 1000),
             "payload": {"consulta": consulta_base, "refinar_busca": False},
             "status_code": status_false,
             "body": body_false,
         },
     )
     _assert_consulta_contract(status_false, body_false)
-
-    status_true, body_true = _post_json(
-        f"{base_url}/api/consulta/",
-        {"consulta": consulta_refinada, "refinar_busca": True},
-        token=access_token,
-    )
     _save_artifact(
         "03_consulta_refinar_true",
         {
-            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "timestamp_utc_inicio": start_true.isoformat(),
+            "timestamp_utc_fim": end_true.isoformat(),
+            "duracao_ms": int((end_true - start_true).total_seconds() * 1000),
             "payload": {"consulta": consulta_refinada, "refinar_busca": True},
             "status_code": status_true,
             "body": body_true,
         },
     )
     _assert_consulta_contract(status_true, body_true)
+
+    _save_artifact(
+        "04_resumo_concorrencia",
+        {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "modo_execucao": "concorrente",
+            "chamadas": [
+                {
+                    "nome": "consulta_refinar_false",
+                    "status_code": status_false,
+                    "status_body": body_false.get("status"),
+                    "duracao_ms": int((end_false - start_false).total_seconds() * 1000),
+                },
+                {
+                    "nome": "consulta_refinar_true",
+                    "status_code": status_true,
+                    "status_body": body_true.get("status"),
+                    "duracao_ms": int((end_true - start_true).total_seconds() * 1000),
+                },
+            ],
+        },
+    )

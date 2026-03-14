@@ -206,7 +206,7 @@ Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `
 
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
-- Objetivo: validar contrato da API online com chamadas reais (`refinar_busca=false` e `refinar_busca=true`), reduzindo risco de regressão por intermitência de UI externa.
+- Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), reduzindo risco de regressão por intermitência de UI externa.
 - Variáveis necessárias:
   - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
   - `E2E_CLIENT_ID`
@@ -221,7 +221,7 @@ E2E_CLIENT_SECRET=... \
 E2E_CONSULTA_BASE=... \
 ./venv/bin/pytest -q tests/test_e2e_smoke.py -m e2e
 ```
-- Artefatos são salvos em `output/e2e-artifacts/` (respostas, status HTTP e `junit.xml` no CI).
+- Artefatos são salvos em `output/e2e-artifacts/` (respostas, status HTTP, durações e `junit.xml` no CI).
 
 ### GitHub Actions (E2E)
 - Workflow: `.github/workflows/e2e-smoke.yml`
