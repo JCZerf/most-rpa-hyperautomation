@@ -27,6 +27,13 @@ playwright install
 cp example.env .env   # ajuste os valores reais
 ```
 
+## Deploy com Docker (local)
+```bash
+docker build -t most-rpa .
+docker run --env-file .env -p 8000:8000 most-rpa
+```
+Swagger: `http://127.0.0.1:8000/api/docs/`
+
 ## Executar como API (Django)
 ```bash
 python manage.py runserver 8000
@@ -36,7 +43,8 @@ python manage.py runserver 8000
 - Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. Tokens expiram após o TTL configurado (`API_TOKEN_TTL`).
 
 ### Autenticação (OAuth2 client_credentials simplificado)
-- `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`. `client_id`/`client_secret` vêm do `.env` (`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`).
+- `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`.
+- Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL = `API_TOKEN_TTL`.
 - Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens HS256, `aud` configurado por `OAUTH_AUDIENCE`, expiram após `API_TOKEN_TTL` segundos.
 
 ### Endpoint principal

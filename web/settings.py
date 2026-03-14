@@ -40,6 +40,10 @@ SPECTACULAR_SETTINGS = {
     'SECURITY': [
         {'bearerAuth': []},
     ],
+    'TAGS': [
+        {'name': 'Auth', 'description': 'Autenticação OAuth2 (client_credentials)'},
+        {'name': 'Consulta', 'description': 'Execução do robô de transparência'},
+    ],
     'APPEND_COMPONENTS': {
         'securitySchemes': {
             'bearerAuth': {
@@ -51,6 +55,8 @@ SPECTACULAR_SETTINGS = {
     },
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,
+        'tagsSorter': 'manual',
+        'operationsSorter': 'alpha',
     },
 }
 

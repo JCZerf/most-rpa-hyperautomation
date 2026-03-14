@@ -164,12 +164,8 @@ def consulta(request: Request):
 @extend_schema(
     methods=['POST'],
     tags=["Auth"],
-    summary="Fluxo OAuth2 client_credentials simplificado (gera JWT HS256)",
-    description=(
-        "Envie client_id e client_secret (configurados via env) e receba um access_token JWT HS256 "
-        "com audience definida e escopos solicitados.\n"
-        "grant_type deve ser 'client_credentials'. Scope padrão: 'bot:read'."
-    ),
+    summary="OAuth2 client_credentials (gera JWT HS256)",
+    description="Envie grant_type=client_credentials, client_id/client_secret (do .env) e receba um JWT HS256 com scope e audience definidos.",
     examples=[
         OpenApiExample('Token request', value={"grant_type": "client_credentials", "client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET"}, request_only=True, media_type='application/json'),
     ],
