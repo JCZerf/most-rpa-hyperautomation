@@ -189,6 +189,31 @@ pytest
 ```
 Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `/api/consulta/`) com mocks para evitar abrir o navegador.
 
+### Teste E2E smoke (ambiente real)
+- Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
+- Objetivo: validar contrato da API online com chamadas reais (`refinar_busca=false` e `refinar_busca=true`), reduzindo risco de regressão por intermitência de UI externa.
+- Variáveis necessárias:
+  - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
+  - `E2E_CLIENT_ID`
+  - `E2E_CLIENT_SECRET`
+  - `E2E_CONSULTA_BASE`
+  - `E2E_CONSULTA_REFINADA` (opcional; se ausente, reutiliza `E2E_CONSULTA_BASE`)
+- Execução local:
+```bash
+E2E_BASE_URL=... \
+E2E_CLIENT_ID=... \
+E2E_CLIENT_SECRET=... \
+E2E_CONSULTA_BASE=... \
+./venv/bin/pytest -q tests/test_e2e_smoke.py -m e2e
+```
+- Artefatos são salvos em `output/e2e-artifacts/` (respostas, status HTTP e `junit.xml` no CI).
+
+### GitHub Actions (E2E)
+- Workflow: `.github/workflows/e2e-smoke.yml`
+- Disparo: manual (`workflow_dispatch`) e agendado diário.
+- Configure os secrets do repositório:
+  - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA` (opcional).
+
 ## Estrutura de saída (resumo)
 - `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
