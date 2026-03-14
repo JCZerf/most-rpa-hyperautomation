@@ -52,5 +52,5 @@ COPY . .
 # Expõe a porta do Django
 EXPOSE 8000
 
-# Comando padrão: gunicorn em modo WSGI
-CMD ["gunicorn", "web.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# Comando padrão: gunicorn em modo WSGI (1 worker para reduzir consumo em ambientes free)
+CMD ["gunicorn", "web.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1"]
