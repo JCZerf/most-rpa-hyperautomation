@@ -44,6 +44,10 @@ def _save_artifact(name: str, payload: dict):
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _require_success_enabled() -> bool:
+    return os.getenv("E2E_REQUIRE_SUCCESS", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _assert_consulta_contract(status_code: int, body: dict):
     assert status_code in (200, 400, 401, 403, 500)
     assert isinstance(body, dict)
@@ -162,3 +166,9 @@ def test_e2e_smoke_consulta_simples_e_refinada():
             ],
         },
     )
+
+    if _require_success_enabled():
+        assert status_false == 200, f"Consulta concorrente (refinar_busca=false) retornou {status_false}: {body_false}"
+        assert status_true == 200, f"Consulta concorrente (refinar_busca=true) retornou {status_true}: {body_true}"
+        assert body_false.get("status") != "invalid", f"Consulta base inválida: {body_false}"
+        assert body_true.get("status") != "invalid", f"Consulta refinada inválida: {body_true}"

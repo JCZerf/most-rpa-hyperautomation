@@ -28,9 +28,10 @@ jobs:
           E2E_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
           E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
           E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
+          E2E_CONSULTA_REFINADA: ${{ secrets.E2E_CONSULTA_REFINADA }}
         run: |
           missing=0
-          for var in E2E_BASE_URL E2E_CLIENT_ID E2E_CLIENT_SECRET E2E_CONSULTA_BASE; do
+          for var in E2E_BASE_URL E2E_CLIENT_ID E2E_CLIENT_SECRET E2E_CONSULTA_BASE E2E_CONSULTA_REFINADA; do
             if [ -z "${!var}" ]; then
               echo "Missing required secret: $var"
               missing=1
@@ -47,6 +48,7 @@ jobs:
           E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
           E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
           E2E_CONSULTA_REFINADA: ${{ secrets.E2E_CONSULTA_REFINADA }}
+          E2E_REQUIRE_SUCCESS: "true"
         run: |
           mkdir -p output/e2e-artifacts
           pytest -q tests/test_e2e_smoke.py -m e2e --junitxml=output/e2e-artifacts/junit.xml
@@ -58,4 +60,3 @@ jobs:
           name: e2e-smoke-artifacts
           path: output/e2e-artifacts
           if-no-files-found: warn
-
