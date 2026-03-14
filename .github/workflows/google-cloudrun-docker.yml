@@ -4,12 +4,12 @@ on:
     branches: [develop]        # automático na develop
   workflow_dispatch: {}        # botão manual; branch é escolhida no UI
 env:
-  PROJECT_ID: most-rpa-hyperautomation-dev
+  PROJECT_ID: most-rpa-hyperautomation-homo
   REGION: us-east1
   SERVICE: most-rpa-hyperautomation
   REPOSITORY: most-rpa-hyperautomation
-  WORKLOAD_IDENTITY_PROVIDER: projects/641979797746/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-  DEPLOY_SA: cloud-run-deployer@most-rpa-hyperautomation-dev.iam.gserviceaccount.com
+  WORKLOAD_IDENTITY_PROVIDER: projects/468738084227/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  DEPLOY_SA: cloud-run-deployer@most-rpa-hyperautomation-homo.iam.gserviceaccount.com
 
 jobs:
   deploy:
@@ -26,11 +26,12 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOY_SA }}
           project_id: ${{ env.PROJECT_ID }}
+          token_format: access_token
 
       - uses: docker/login-action@v3
         with:
           username: oauth2accesstoken
-          password: ${{ steps.auth.outputs.auth_token }}
+          password: ${{ steps.auth.outputs.access_token }}
           registry: ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build and Push Container
@@ -40,10 +41,19 @@ jobs:
           docker push "$REGISTRY_PATH:${{ github.sha }}"
           docker push "$REGISTRY_PATH:latest"
 
-      - uses: google-github-actions/deploy-cloudrun@v2
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
+          env_vars: |
+            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DEBUG=False
+            API_TOKEN_TTL=600
+            OAUTH_CLIENT_ID=${{ secrets.OAUTH_CLIENT_ID }}
+            OAUTH_CLIENT_SECRET=${{ secrets.OAUTH_CLIENT_SECRET }}
+            OAUTH_AUDIENCE=most-rpa-api
+            ALLOWED_HOSTS=.run.app,localhost,127.0.0.1
 
       - run: echo ${{ steps.deploy.outputs.url }}
