@@ -26,18 +26,27 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     if usar_refine:
         logger.info("Fluxo: Busca Refinada selecionado.")
         refine_button = page.get_by_role("button", name="Refine a Busca")
-        refine_button.click()
-
-        box_refine = page.locator("#box-busca-refinada")
-        box_refine.wait_for(state="visible", timeout=10000)
+        try:
+            refine_button.click(timeout=5000)
+        except Exception:
+            refine_button.click(force=True, timeout=5000)
 
         # O label pode aparecer com variação de texto ou estar fora da área visível.
-        # Marcamos direto o checkbox com fallback forçado para evitar timeout intermitente.
+        # Marcamos direto o checkbox com fallback forçado/JS para evitar timeout intermitente.
         filtro_beneficiario = page.locator("#beneficiarioProgramaSocial")
         try:
             filtro_beneficiario.check(timeout=5000)
         except Exception:
-            filtro_beneficiario.check(force=True, timeout=5000)
+            try:
+                filtro_beneficiario.check(force=True, timeout=5000)
+            except Exception:
+                page.eval_on_selector(
+                    "#beneficiarioProgramaSocial",
+                    """(el) => {
+                        el.checked = true;
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }""",
+                )
 
         page.locator("#btnConsultarPF").click()
     else:

@@ -1,11 +1,11 @@
-## Requisitos técnicos do desafio
+## Requisitos técnicos
 - Backend em Python usando Django para disponibilizar o robô como API (recebe parâmetros e retorna JSON).
 - Automação de navegação com Playwright (Chrome/Chromium headless).
 - Geração de evidência (screenshot) convertida para Base64 e embutida na resposta.
 - Estrutura de resposta em JSON contendo panorama, detalhes de benefícios e imagem.
 - Logs de execução e falhas registrados pelo serviço Django.
-- Execução em modo headless com suporte a execuções simultâneas.
-- Se API for disponibilizada online (Parte 2), documentação via Swagger/OpenAPI é diferencial.
+- Autenticação via JWT (HS256) emitido a partir de uma `api_key` (API_MASTER_KEY) e configurado por variáveis de ambiente.
+- Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL do token).
 
 ## Requisitos funcionais (MoSCoW)
 | ID | Descrição | Prioridade (MoSCoW) |
@@ -17,13 +17,6 @@
 | RF-05 | Para cada benefício (Auxílio Brasil, Auxílio Emergencial, Bolsa Família), acessar detalhes e extrair informações. | Must (Alto) |
 | RF-06 | Encerrar a automação e retornar JSON com dados coletados e a imagem Base64. | Must (Alto) |
 
-## Bônus (Parte 2 - hiperautomação)
-| ID | Descrição | Prioridade (MoSCoW) |
-|----|-----------|----------------------|
-| RB-01 | Disponibilizar o robô como API online para acionamento externo. | Could (Médio) |
-| RB-02 | Criar workflow para chamar API, salvar JSON no Google Drive e registrar consulta no Google Sheets. | Could (Médio) |
-| RB-03 | Nomear arquivo no padrão `[IDENTIFICADOR_UNICO]_[DATA_HORA].json` e registrar link no Sheets. | Could (Médio) |
-
 ## Restrições e considerações
 - Sem intervenção manual durante a execução normal; falhas devem ser sinalizadas via log/retorno.
 - A automação depende da disponibilidade e layout do Portal da Transparência; mudanças podem exigir atualização de seletores.
@@ -31,26 +24,12 @@
 - Limite de 3 entradas por requisição (batch) e até 3 execuções paralelas para evitar sobrecarga.
 - Validação prévia de CPF/NIS/nomes; entradas inválidas são rejeitadas sem abrir navegador; logs mascaram identificadores.
 
-## Requisitos adotados no projeto (implementação atual)
-- Autenticação da API via Bearer token JWT HS256 com `API_MASTER_KEY` (chave dedicada).
-- Configuração por variáveis de ambiente (`DJANGO_SECRET_KEY`, `API_MASTER_KEY`, `ALLOWED_HOSTS`, `API_TOKEN_TTL`, credenciais OAuth de cliente).
-- Batch de até 3 entradas por requisição, com paralelismo de bot configurável por ambiente.
-
 ## Critérios de avaliação (do desafio)
 | Categoria | Detalhes esperados |
 |-----------|--------------------|
 | Funcionalidade | Execução correta do robô em todos os cenários de teste. |
 | Código | Legibilidade, modularização, tratamento de erros. |
-| Integrações | Uso eficiente da plataforma de workflow e das APIs do Google (se aplicável). |
+| Integrações | Uso eficiente da plataforma de workflow e das APIs do Google |
 | Segurança | Boas práticas (OAuth 2.0/JWT, variáveis de ambiente). |
 | Documentação | README claro, comentários relevantes. |
 | Bônus | Parte 2 e/ou diferenciais (notificações, testes, etc.). |
-
-## Cenários de teste (MOST)
-| Cenário | Entrada | Saída esperada |
-|---------|---------|----------------|
-| Sucesso (CPF) | CPF ou NIS válido | JSON com dados coletados e evidência da tela. |
-| Erro (CPF) | CPF ou NIS inexistente | JSON com mensagem de erro: "Não foi possível retornar os dados no tempo de resposta solicitado". |
-| Sucesso (Nome) | Nome completo | JSON com dados do primeiro registro equivalente encontrado + evidência. |
-| Erro (Nome) | Nome inexistente | JSON com mensagem de erro: "Foram encontrados 0 resultados para o termo …". |
-| Filtrado | Sobrenome + filtro social | JSON com dados do primeiro registro equivalente encontrado + evidência. |
