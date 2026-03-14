@@ -50,6 +50,7 @@
 
 ## Desafios encontrados
 - **Card rotativo na home do Portal da Transparência**: o card de “Pessoas Físicas e Jurídicas” rotaciona automaticamente e, sem tratamento, o bot podia ficar preso rolando/tentando interagir. Mitigação: clique com `force=True` para estabilizar a transição para a etapa seguinte.
+- **Intermitência no filtro refinado (`refine=true`)**: em ambiente de nuvem, o bloco `#box-busca-refinada` podia permanecer oculto apesar de existir no DOM, causando timeout ao clicar no filtro “Beneficiário de Programa Social”. Mitigação: remoção de dependência de visibilidade do container, clique com fallback `force=True` e marcação do checkbox com fallback em JavaScript (`checked=true` + evento `change`).
 - **Resultados amplos em consultas por nome**: algumas entradas retornam 900+ registros, com alto custo computacional e baixa confiabilidade para identificar a pessoa correta. Mitigação: aplicar regra de desambiguação e tratar retornos ambíguos como não elegíveis para extração automática.
 - **Evidências e ausência de benefício**: além dos casos positivos, foi necessário tratar explicitamente ausência de benefício com evidência em Base64 para rastreabilidade da execução.
 - **OOM no Cloud Run**: Chromium estourou 512 MiB em configurações menores; mitigado com instância mais robusta, `concurrency=1` e ajustes de timeout.
