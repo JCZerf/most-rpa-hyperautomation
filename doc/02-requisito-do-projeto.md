@@ -33,3 +33,22 @@
 | Segurança | Boas práticas (OAuth 2.0/JWT, variáveis de ambiente). |
 | Documentação | README claro, comentários relevantes. |
 | Bônus | Parte 2 e/ou diferenciais (notificações, testes, etc.). |
+
+## Cenários de teste (MOST)
+| Cenário | Entrada | Saída esperada |
+|---------|---------|----------------|
+| Sucesso (CPF) | CPF ou NIS válido | JSON com dados coletados e evidência da tela. |
+| Erro (CPF) | CPF ou NIS inexistente | JSON com mensagem de erro: "Não foi possível retornar os dados no tempo de resposta solicitado". |
+| Sucesso (Nome) | Nome completo | JSON com dados do primeiro registro equivalente encontrado + evidência. |
+| Erro (Nome) | Nome inexistente | JSON com mensagem de erro: "Foram encontrados 0 resultados para o termo …". |
+| Filtrado | Sobrenome + filtro social | JSON com dados do primeiro registro equivalente encontrado + evidência. |
+
+## Contrato de resposta da API
+- **Consulta única com sucesso (`200`)**: retorna objeto raiz com `pessoa`, `beneficios` e `meta`.
+- **Consulta única sem resultado de negócio (`200`)**: retorna `status="error"`, `error`, `beneficios=[]` e `meta` com evidência em Base64.
+- **Lote (`200`)**: retorna `resultados[]`, cada item com `consulta`, `status` (`ok`, `invalid` ou `error`) e `resultado`/`error`.
+- **Erros de protocolo/autenticação**:
+  - `400`: payload inválido, entrada inválida ou limite excedido.
+  - `401`: token ausente, inválido ou expirado.
+  - `403`: escopo insuficiente.
+  - `500`: falha inesperada no processamento.

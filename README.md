@@ -68,11 +68,107 @@ python manage.py runserver 8000
 `POST /api/consulta/`
 
 Payloads aceitos:
-- **Single**: `{"consulta": "04031769644", "refine": false}`
-- **Batch simples**: `{"consultas": ["04031769644", "12345678901"], "refine": false}` (máx. 3 entradas)
-- **Batch avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refine": false}]}` (máx. 3 itens; `refine` padrão = false)
+- **Consulta única**: `{"consulta": "04031769644", "refinar_busca": false}`
+- **Lote simples**: `{"consultas": ["04031769644", "12345678901"], "refinar_busca": false}` (máx. 3 entradas)
+- **Lote avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": false}]}` (máx. 3 itens; `refinar_busca` padrão = false)
+- **Compatibilidade**: o campo legado `refine` continua aceito.
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
+
+### Formato das respostas da API
+
+#### 1) Consulta única com sucesso (`200 OK`)
+```json
+{
+  "pessoa": {
+    "nome": "NOME DA PESSOA",
+    "cpf": "***.***.***-**",
+    "localidade": "UF",
+    "quantidade_beneficios": 1
+  },
+  "beneficios": [
+    {
+      "tipo": "Auxílio Brasil",
+      "nis": "1234 5678 901",
+      "valor_recebido": "R$ 600,00",
+      "detalhe_href": "/...",
+      "detalhe_evidencia": "<base64>",
+      "parcelas": [
+        {
+          "mes_folha": "01/2024",
+          "mes_referencia": "01/2024",
+          "uf": "SP",
+          "municipio": "São Paulo",
+          "quantidade_dependentes": "0",
+          "valor": "R$ 600,00"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "resultados_encontrados": 1,
+    "beneficios_encontrados": [
+      "Auxílio Brasil"
+    ],
+    "panorama_relacao": "<base64>",
+    "data_consulta": "14/03/2026",
+    "hora_consulta": "10:30"
+  }
+}
+```
+
+#### 2) Consulta única sem resultado (`200 OK` com erro de negócio)
+```json
+{
+  "status": "error",
+  "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+  "pessoa": {
+    "consulta": "04031769644"
+  },
+  "beneficios": [],
+  "meta": {
+    "resultados_encontrados": 0,
+    "evidencia_resultados_zero": "<base64>",
+    "data_consulta": "14/03/2026",
+    "hora_consulta": "10:31",
+    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado"
+  }
+}
+```
+
+#### 3) Lote (`200 OK`)
+```json
+{
+  "resultados": [
+    {
+      "consulta": "04031769644",
+      "status": "ok",
+      "resultado": {
+        "pessoa": {},
+        "beneficios": [],
+        "meta": {}
+      }
+    },
+    {
+      "consulta": "NOME INEXISTENTE",
+      "status": "invalid",
+      "resultado": {
+        "status": "invalid",
+        "error": "..."
+      }
+    }
+  ]
+}
+```
+
+#### 4) Erros de protocolo/segurança
+
+| HTTP | Quando acontece | Exemplo |
+|------|------------------|---------|
+| `400` | payload inválido, limite excedido, entrada inválida no single | `{"status":"error","error":"Máximo de 3 consultas por requisição"}` |
+| `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
+| `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
+| `500` | falha inesperada no processamento | `{"status":"error","error":"<mensagem-interna>"}` |
 
 ## Executar via runner local
 Edite a lista `lista_alvos` em `main.py` e rode:
@@ -84,6 +180,7 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 ## Parâmetros importantes
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
+- Na API, prefira o campo `refinar_busca`; `refine` é mantido apenas por compatibilidade.
 - Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
 
 ## Testes

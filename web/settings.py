@@ -31,8 +31,14 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'TransparencyBot API',
-    'DESCRIPTION': 'API para consultar robô de transparência',
+    'TITLE': 'API do Robô de Transparência',
+    'DESCRIPTION': (
+        'API para consultar dados no Portal da Transparência.\n\n'
+        'Fluxo recomendado:\n'
+        '1. Gere um token em /api/token/\n'
+        '2. Autorize no Swagger com "Bearer <token>"\n'
+        '3. Execute /api/consulta/ com os exemplos disponíveis'
+    ),
     'VERSION': '1.0.0',
     # Usar servidor relativo para evitar CORS/mixed content no Swagger
     'SERVERS': [
@@ -42,7 +48,7 @@ SPECTACULAR_SETTINGS = {
         {'bearerAuth': []},
     ],
     'TAGS': [
-        {'name': 'Auth', 'description': 'Autenticação OAuth2 (client_credentials)'},
+        {'name': 'Autenticação', 'description': 'Emissão de token OAuth2 (client_credentials)'},
         {'name': 'Consulta', 'description': 'Execução do robô de transparência'},
     ],
     'APPEND_COMPONENTS': {
@@ -58,6 +64,8 @@ SPECTACULAR_SETTINGS = {
         'persistAuthorization': True,
         'tagsSorter': 'manual',
         'operationsSorter': 'alpha',
+        'docExpansion': 'list',
+        'displayRequestDuration': True,
     },
 }
 

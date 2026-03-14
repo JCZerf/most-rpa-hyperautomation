@@ -6,7 +6,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.http import JsonResponse, HttpResponseBadRequest
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
-from drf_spectacular.utils import extend_schema, OpenApiExample
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, OpenApiExample, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
 from bot.scraper import TransparencyBot
@@ -19,6 +20,22 @@ MAX_BATCH = 3
 MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
 
 
+class ItemConsultaSerializer(serializers.Serializer):
+    consulta = serializers.CharField(help_text="CPF, NIS ou nome completo.")
+    refinar_busca = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Quando true, aplica o filtro 'Beneficiário de Programa Social'.",
+    )
+
+
+def _resolve_refine_flag(payload: Dict[str, Any], default: bool = False) -> bool:
+    # Campo preferencial em português. Mantemos 'refine' por compatibilidade retroativa.
+    if "refinar_busca" in payload:
+        return bool(payload.get("refinar_busca"))
+    return bool(payload.get("refine", default))
+
+
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
     bot = TransparencyBot(headless=True, alvo=str(consulta_param), usar_refine=bool(refine_param))
     resultado = bot.run()
@@ -28,21 +45,62 @@ def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
 @extend_schema(
     methods=['POST'],
     tags=["Consulta"],
-    summary="Executa a consulta no Portal da Transparência (single ou batch)",
+    summary="Executa consulta no Portal da Transparência (única ou lote)",
     description=(
         "Suporta 3 formatos de payload:\n"
-        "- Single: {\"consulta\":\"...\",\"refine\":false}\n"
-        "- Batch simples: {\"consultas\":[\"...\",\"...\"],\"refine\":false} (máx. 3)\n"
-        "- Batch avançado: {\"itens\":[{\"consulta\":\"...\",\"refine\":false}, ...]} (máx. 3, refine opcional por item)\n\n"
-        "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome. "
-        "Se 'refine' for omitido no item, usa False por padrão."
+        "- Consulta única: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
+        "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
+        "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
+        "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
+        "Compatibilidade: o campo legado 'refine' continua aceito."
     ),
     examples=[
-        OpenApiExample('Single', value={"consulta": "04031769644", "refine": False}, request_only=True, media_type='application/json'),
-        OpenApiExample('Batch simples', value={"consultas": ["04031769644", "12345678901"], "refine": True}, request_only=True, media_type='application/json'),
-        OpenApiExample('Batch avançado', value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refine": False}]}, request_only=True, media_type='application/json'),
+        OpenApiExample(
+            "Consulta única",
+            value={"consulta": "04031769644", "refinar_busca": False},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Lote simples",
+            value={"consultas": ["04031769644", "12345678901"], "refinar_busca": True},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Lote avançado",
+            value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": False}]},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Compatibilidade (legado)",
+            value={"consulta": "04031769644", "refine": True},
+            request_only=True,
+            media_type='application/json',
+        ),
     ],
-    request=OpenApiTypes.OBJECT,
+    request=inline_serializer(
+        name="ConsultaRequest",
+        fields={
+            "consulta": serializers.CharField(required=False, help_text="Consulta única: CPF, NIS ou nome."),
+            "consultas": serializers.ListField(
+                child=serializers.CharField(),
+                required=False,
+                help_text="Lote simples: lista de consultas (máximo 3).",
+            ),
+            "itens": ItemConsultaSerializer(many=True, required=False),
+            "refinar_busca": serializers.BooleanField(
+                required=False,
+                default=False,
+                help_text="Ativa o filtro 'Beneficiário de Programa Social'.",
+            ),
+            "refine": serializers.BooleanField(
+                required=False,
+                help_text="Campo legado aceito por compatibilidade.",
+            ),
+        },
+    ),
     responses=OpenApiTypes.OBJECT,
 )
 @api_view(['POST'])
@@ -70,7 +128,7 @@ def consulta(request: Request):
 
     if 'consultas' in payload and isinstance(payload.get('consultas'), list):
         consultas = payload.get('consultas', [])
-        refine_default = bool(payload.get('refine', False))
+        refine_default = _resolve_refine_flag(payload, default=False)
         if len(consultas) == 0:
             return HttpResponseBadRequest('Lista "consultas" vazia')
         if len(consultas) > MAX_BATCH:
@@ -113,7 +171,7 @@ def consulta(request: Request):
             ordered_inputs = []
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
-                refine = item.get('refine', False)
+                refine = _resolve_refine_flag(item, default=False)
                 ordered_inputs.append((c, refine))
                 if not c:
                     resultados.append({"consulta": None, "status": "error", "error": 'Missing consulta in item'})
@@ -142,7 +200,7 @@ def consulta(request: Request):
 
     # Single
     consulta_param = payload.get('consulta') or payload.get('alvo')
-    refine_param = payload.get('refine', False)
+    refine_param = _resolve_refine_flag(payload, default=False)
 
     if consulta_param is None:
         return HttpResponseBadRequest('Missing "consulta" parameter')
@@ -164,14 +222,35 @@ def consulta(request: Request):
 
 @extend_schema(
     methods=['POST'],
-    tags=["Auth"],
-    summary="OAuth2 client_credentials (gera JWT HS256)",
-    description="Envie grant_type=client_credentials, client_id/client_secret (do .env) e receba um JWT HS256 com scope e audience definidos.",
+    tags=["Autenticação"],
+    summary="Gerar token de acesso (OAuth2 client_credentials)",
+    description="Envie grant_type=client_credentials, client_id e client_secret para receber um JWT HS256.",
     examples=[
-        OpenApiExample('Token request', value={"grant_type": "client_credentials", "client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET"}, request_only=True, media_type='application/json'),
+        OpenApiExample(
+            'Requisição de token',
+            value={"grant_type": "client_credentials", "client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET"},
+            request_only=True,
+            media_type='application/json',
+        ),
     ],
-    request=OpenApiTypes.OBJECT,
-    responses=OpenApiTypes.OBJECT,
+    request=inline_serializer(
+        name="TokenRequest",
+        fields={
+            "grant_type": serializers.CharField(help_text="Use sempre client_credentials."),
+            "client_id": serializers.CharField(),
+            "client_secret": serializers.CharField(),
+            "scope": serializers.CharField(required=False, default="bot:read"),
+        },
+    ),
+    responses=inline_serializer(
+        name="TokenResponse",
+        fields={
+            "access_token": serializers.CharField(),
+            "expires_in": serializers.IntegerField(),
+            "token_type": serializers.CharField(),
+            "scope": serializers.CharField(),
+        },
+    ),
     auth=None,
 )
 @api_view(['POST'])
