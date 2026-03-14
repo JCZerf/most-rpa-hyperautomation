@@ -12,10 +12,41 @@
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
 - Mensagens de erro dos cenários de teste (MOST): **feito** para os cenários principais (CPF/NIS inexistente e nome sem resultado).
 - Segurança/LGPD (mascarar identificadores em logs): **feito (básico)**.
+- E2E smoke em ambiente real (API online): **feito** (`tests/test_e2e_smoke.py` + workflow `.github/workflows/e2e-smoke.yml` com artefatos).
+
+## Linha do tempo (execução)
+- **Fase 1 — Base técnica (concluída):** bot Playwright, API Django, autenticação, deploy Cloud Run, documentação Swagger.
+- **Fase 2 — Robustez e contrato (concluída):** padronização de erros/respostas, cobertura de testes unitários/API, documentação de payload e formato de retorno.
+- **Fase 3 — Validação real (concluída):** execução E2E smoke pós-deploy e rodada manual concorrente, com artefatos versionados.
+- **Fase 4 — Bônus hiperautomação (em andamento):** ferramenta escolhida (**Make**); implementação do workflow para acionar API, salvar JSON no Google Drive e registrar metadados/link no Google Sheets.
+- **Fase 5 — Fechamento de entrega (próxima):** evidências finais para apresentação, right-sizing final e checklist de segurança/segredos.
+
+## Backlog imediato (próximas implementações)
+- Implementar Parte 2 (bônus):
+  - Chamar `/api/token/` e `/api/consulta/` no Make.
+  - Salvar JSON no Google Drive no padrão `[IDENTIFICADOR_UNICO]_[DATA_HORA].json`.
+  - Atualizar linha no Google Sheets com identificador, nome, CPF (mascarado), data/hora e link do arquivo.
+- Registrar evidência final do cenário de ponta a ponta da Parte 2 (run do Make + arquivo no Drive + linha no Sheets).
+- Consolidar política de retenção/expurgo para evidências em Base64 no fluxo externo (Make/Google).
+
+## Evidências registradas
+- E2E smoke pós-deploy (run `23096919987`, status: aprovado): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
+- Metadados da execução e instruções da coleta: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
+- E2E smoke concorrente (rodada local, `refinar_busca` true/false em paralelo): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
+- Metadados da rodada concorrente: [README da evidência concorrente](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/README.md)
+- E2E smoke atualizado (rodada manual pós-ajuste de concorrência): [e2e-smoke-artifacts manual](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/e2e-smoke-artifacts)
+- Metadados da rodada manual atualizada: [README da evidência manual](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
+- Evidências de desempenho em homologação (14/03/2026 19h): [performance-hml](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h)
+- Evidências da documentação interativa e autenticação: [api-docs](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h)
 
 ## Ações em aberto
-- Consolidar validação em ambiente homologação com chamadas reais ao portal para registrar evidências finais de RF-01 a RF-06.
-- Executar e registrar evidência de teste de execução simultânea (2-3 consultas em paralelo) para apresentação técnica.
+- Finalizar a implementação do bônus da Parte 2 no Make e versionar evidências da execução ponta a ponta.
 - Ajustar right-sizing de infraestrutura após coleta de métricas (memória, latência e taxa de erro), mantendo estabilidade como prioridade.
 - Definir política de retenção/expurgo para evidências em Base64 no consumo downstream (governança LGPD).
 - Opcional de evolução: ampliar navegação para abas/tabelas adicionais de detalhe, se o escopo pós-desafio exigir maior cobertura funcional.
+
+## Nota LGPD (retenção e expurgo)
+- A solução não utiliza banco de dados para persistência de consultas; o processamento ocorre em memória e a resposta é devolvida na API.
+- As evidências em Base64 são transitórias no ciclo da requisição/resposta.
+- Não há retenção operacional de histórico de dados pessoais na aplicação.
+- Exceção: artefatos de homologação/evidência técnica gerados manualmente para o desafio podem ser removidos após o processo avaliativo.

@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="63.958" timestamp="2026-03-14T22:41:00.969469+00:00" hostname="runnervm0kj6c"><testcase classname="tests.test_e2e_smoke" name="test_e2e_smoke_consulta_simples_e_refinada" time="63.777" /></testsuite></testsuites>

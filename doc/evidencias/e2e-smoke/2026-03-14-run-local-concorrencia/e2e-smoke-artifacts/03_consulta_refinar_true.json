@@ -1,0 +1,15 @@
+{
+  "timestamp_utc_inicio": "2026-03-14T22:27:16.645732+00:00",
+  "timestamp_utc_fim": "2026-03-14T22:27:51.902692+00:00",
+  "duracao_ms": 35256,
+  "payload": {
+    "consulta": "refinar_busca=true",
+    "refinar_busca": true
+  },
+  "status_code": 400,
+  "body": {
+    "status": "invalid",
+    "error": "Nome inválido (somente letras/espacos/pontuação simples)",
+    "consulta": "refinar_busca=true"
+  }
+}
