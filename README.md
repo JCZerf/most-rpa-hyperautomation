@@ -26,7 +26,7 @@ pip install -r requirements.txt
 playwright install
 cp example.env .env   # ajuste os valores reais
 ```
-> Em produção (Render ou similar), ajuste `ALLOWED_HOSTS` para incluir o domínio do serviço (ex.: `most-rpa-hyperautomation.onrender.com` ou `*.onrender.com`).
+> Em produção (Cloud Run ou similar), ajuste `ALLOWED_HOSTS` para incluir o domínio do serviço (ex.: `*.run.app`).
 
 ## Deploy com Docker (local)
 ```bash
@@ -54,7 +54,7 @@ python manage.py runserver 8000
 Payloads aceitos:
 - **Single**: `{"consulta": "04031769644", "refine": false}`
 - **Batch simples**: `{"consultas": ["04031769644", "12345678901"], "refine": false}` (máx. 3 entradas)
-- **Batch avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refine": false}]}` (máx. 3 itens; `refine` padrão = true)
+- **Batch avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refine": false}]}` (máx. 3 itens; `refine` padrão = false)
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
@@ -68,6 +68,7 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 ## Parâmetros importantes
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
+- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
 
 ## Testes
 ```bash

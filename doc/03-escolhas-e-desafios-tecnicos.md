@@ -28,6 +28,10 @@
   - Opções: Aumentar concorrência ou instâncias com mais memória.  
   - Escolha: **concurrency=1 e instância com 4 Gi / 2 vCPU** para priorizar estabilidade do Chromium durante scraping; preferir right-sizing posterior com métricas (latência, memória e taxa de erro) após validar funcionamento fim a fim.
 
+- **Execuções simultâneas (requisito do desafio)**  
+  - Opções: paralelismo alto por requisição em produção vs paralelismo controlado por ambiente.  
+  - Escolha: **suporte a execução simultânea mantido no código** (batch e runner local), com **limite operacional mais conservador em produção** para evitar instabilidade do navegador sob carga.
+
 - **Arquitetura da solução**  
   - Opções: fluxo concentrado em um único arquivo vs separação por responsabilidades.  
   - Escolha: **arquitetura simples e modular**, separando bot e API em arquivos com responsabilidades específicas (`navigation`, `extraction`, `browser`, `views`, `auth`), para facilitar manutenção, testes e evolução incremental.

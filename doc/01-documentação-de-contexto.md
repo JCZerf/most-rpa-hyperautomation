@@ -2,6 +2,11 @@
 - **Aplicação:** Robô de Automação Robótica de Processos (RPA) com abordagem de hiperautomação em Python.
 - **Propósito:** Automatizar a coleta de dados do Portal da Transparência (consulta “Pessoas Físicas e Jurídicas”) e entregar um JSON consolidado com evidência em Base64 para uso em fluxos internos.
 
+## Contexto do desafio
+- **Parte 1 (obrigatória):** automação web em Python para navegar no portal, consultar por nome/CPF/NIS, extrair dados, gerar evidência e retornar JSON.
+- **Parte 2 (bônus):** orquestração via workflow low-code/no-code para acionar API do robô, salvar JSON no Google Drive e atualizar Google Sheets.
+- **Entrega esperada:** código-fonte, documentação técnica (decisões e desafios) e demonstração prática com execução simultânea.
+
 ## Problema e oportunidade
 - Consultas manuais no Portal da Transparência são repetitivas, suscetíveis a erros e lentas.
 - Necessidade de padronizar evidências e consolidar benefícios de programas sociais em um formato consumível por outros sistemas.
