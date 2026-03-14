@@ -34,8 +34,9 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'TransparencyBot API',
     'DESCRIPTION': 'API para consultar robô de transparência',
     'VERSION': '1.0.0',
+    # Usar servidor relativo para evitar CORS/mixed content no Swagger
     'SERVERS': [
-        {'url': 'http://127.0.0.1:8000', 'description': 'Local'},
+        {'url': '/', 'description': 'Atual'},
     ],
     'SECURITY': [
         {'bearerAuth': []},
