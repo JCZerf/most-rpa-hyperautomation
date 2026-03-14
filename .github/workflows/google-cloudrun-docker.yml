@@ -35,9 +35,10 @@ jobs:
 
       - name: Build and Push Container
         run: |
-          DOCKER_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}"
-          docker build -t "$DOCKER_TAG" .
-          docker push "$DOCKER_TAG"
+          REGISTRY_PATH="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}"
+          docker build -t "$REGISTRY_PATH:${{ github.sha }}" -t "$REGISTRY_PATH:latest" .
+          docker push "$REGISTRY_PATH:${{ github.sha }}"
+          docker push "$REGISTRY_PATH:latest"
 
       - uses: google-github-actions/deploy-cloudrun@v2
         with:
