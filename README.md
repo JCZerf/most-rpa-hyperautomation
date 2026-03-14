@@ -246,6 +246,8 @@ E2E_CONSULTA_BASE=... \
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
 - Não versione segredos reais no repositório. Use `example.env` como referência, mantenha `.env` fora do Git e injete credenciais via secrets do ambiente (ex.: GitHub Secrets/Cloud Run).
+- A aplicação não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta da API.
+- Evidências em Base64 são tratadas como transitórias; artefatos de homologação/documentação existem apenas para fins de validação técnica do desafio.
 
 ## Cenários de teste do desafio
 Os cenários fornecidos pela MOST estão documentados em `doc/02-requisito-do-projeto.md` (seção “Cenários de teste”). A suíte `pytest` cobre os casos de sucesso/erro por CPF/NIS e Nome, além de cenário com parcelas e evidências.

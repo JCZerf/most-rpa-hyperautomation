@@ -41,3 +41,9 @@
 - Ajustar right-sizing de infraestrutura após coleta de métricas (memória, latência e taxa de erro), mantendo estabilidade como prioridade.
 - Definir política de retenção/expurgo para evidências em Base64 no consumo downstream (governança LGPD).
 - Opcional de evolução: ampliar navegação para abas/tabelas adicionais de detalhe, se o escopo pós-desafio exigir maior cobertura funcional.
+
+## Nota LGPD (retenção e expurgo)
+- A solução não utiliza banco de dados para persistência de consultas; o processamento ocorre em memória e a resposta é devolvida na API.
+- As evidências em Base64 são transitórias no ciclo da requisição/resposta.
+- Não há retenção operacional de histórico de dados pessoais na aplicação.
+- Exceção: artefatos de homologação/evidência técnica gerados manualmente para o desafio podem ser removidos após o processo avaliativo.
