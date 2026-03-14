@@ -49,8 +49,8 @@ RUN playwright install --with-deps chromium
 # Copia o código
 COPY . .
 
-# Expõe a porta do Django
-EXPOSE 8000
+# Porta padrão para Cloud Run (ajusta via env PORT)
+EXPOSE 8080
 
-# Comando padrão: gunicorn em modo WSGI (1 worker para reduzir consumo em ambientes free)
-CMD ["gunicorn", "web.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1"]
+# Comando padrão: gunicorn lendo a porta do ambiente (fallback 8000 para dev local)
+CMD ["sh", "-c", "gunicorn web.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1"]
