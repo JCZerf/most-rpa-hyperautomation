@@ -1,19 +1,14 @@
 name: Build and Deploy to Cloud Run
 on:
   push:
-    branches: [main]        # automático na main
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch a deployar'
-        default: main
-        required: true
+    branches: [develop]        # automático na develop
+  workflow_dispatch: {}        # botão manual; branch é escolhida no UI
 env:
   PROJECT_ID: most-rpa-hyperautomation-dev
   REGION: us-east1
   SERVICE: most-rpa-hyperautomation
   REPOSITORY: most-rpa-hyperautomation
-  WORKLOAD_IDENTITY_PROVIDER: projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider
+  WORKLOAD_IDENTITY_PROVIDER: projects/641979797746/locations/global/workloadIdentityPools/github-pool/providers/github-provider
   DEPLOY_SA: cloud-run-deployer@most-rpa-hyperautomation-dev.iam.gserviceaccount.com
 
 jobs:
@@ -24,8 +19,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || 'main' }}
 
       - id: auth
         uses: google-github-actions/auth@v2
