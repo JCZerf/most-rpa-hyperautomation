@@ -49,6 +49,7 @@ jobs:
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           env_vars: |
             DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            API_MASTER_KEY=${{ secrets.API_MASTER_KEY }}
             DEBUG=False
             API_TOKEN_TTL=600
             OAUTH_CLIENT_ID=${{ secrets.OAUTH_CLIENT_ID }}
