@@ -28,6 +28,21 @@ most-rpa-hyperautomation/
 └── README.md                 # Guia de uso e operação
 ```
 
+## Fluxo da API
+```mermaid
+flowchart LR
+    A[Cliente/API Consumer] --> B[POST /api/token]
+    B --> C[JWT Bearer]
+    C --> D[POST /api/consulta]
+    D --> E[Validação e Autorização]
+    E --> F[Bot Playwright]
+    F --> G[Portal da Transparência]
+    G --> H[Extração de panorama e benefícios]
+    H --> I[Evidências em Base64]
+    I --> J[Resposta JSON]
+    J --> A
+```
+
 ## Requisitos
 - Python 3.10+ (testado em Linux)
 - `pip install -r requirements.txt`

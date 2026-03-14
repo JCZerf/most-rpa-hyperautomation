@@ -54,7 +54,12 @@ def _assert_consulta_contract(status_code: int, body: dict):
             or (body.get("status") == "error" and "error" in body)
         )
     else:
-        assert body.get("status") == "error"
+        # Em 400, a API pode devolver status=invalid (erro de validação de entrada)
+        # ou status=error (erro de payload/protocolo).
+        if status_code == 400:
+            assert body.get("status") in ("error", "invalid")
+        else:
+            assert body.get("status") == "error"
         assert "error" in body
 
 
@@ -121,4 +126,3 @@ def test_e2e_smoke_consulta_simples_e_refinada():
         },
     )
     _assert_consulta_contract(status_true, body_true)
-
