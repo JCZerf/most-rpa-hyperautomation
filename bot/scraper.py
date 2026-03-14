@@ -50,6 +50,8 @@ class TransparencyBot:
                 search_result = perform_search(page, self.url_base, self.alvo, self.usar_refine)
                 if search_result.get("zero"):
                     return {
+                        "status": "error",
+                        "error": search_result.get("mensagem"),
                         "pessoa": {"consulta": self.alvo},
                         "beneficios": [],
                         "meta": {
@@ -57,6 +59,7 @@ class TransparencyBot:
                             "evidencia_resultados_zero": search_result.get("evidencia_base64"),
                             "data_consulta": search_result.get("data_consulta"),
                             "hora_consulta": search_result.get("hora_consulta"),
+                            "mensagem": search_result.get("mensagem"),
                         },
                     }
 
@@ -109,7 +112,7 @@ class TransparencyBot:
 
             except Exception as e:
                 logger.error(f"Erro durante a execução do bot: {e}", exc_info=True)
-                return {"error": str(e)}
+                return {"status": "error", "error": str(e)}
 
             finally:
                 try:

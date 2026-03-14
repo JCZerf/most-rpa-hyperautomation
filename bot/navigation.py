@@ -25,8 +25,29 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
 
     if usar_refine:
         logger.info("Fluxo: Busca Refinada selecionado.")
-        page.get_by_role("button", name="Refine a Busca").click()
-        page.locator("#box-busca-refinada").get_by_text("Beneficiário de Programa").click()
+        refine_button = page.get_by_role("button", name="Refine a Busca")
+        try:
+            refine_button.click(timeout=5000)
+        except Exception:
+            refine_button.click(force=True, timeout=5000)
+
+        # O label pode aparecer com variação de texto ou estar fora da área visível.
+        # Marcamos direto o checkbox com fallback forçado/JS para evitar timeout intermitente.
+        filtro_beneficiario = page.locator("#beneficiarioProgramaSocial")
+        try:
+            filtro_beneficiario.check(timeout=5000)
+        except Exception:
+            try:
+                filtro_beneficiario.check(force=True, timeout=5000)
+            except Exception:
+                page.eval_on_selector(
+                    "#beneficiarioProgramaSocial",
+                    """(el) => {
+                        el.checked = true;
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }""",
+                )
+
         page.locator("#btnConsultarPF").click()
     else:
         logger.info("Fluxo: Busca Simples (Lupa) selecionado.")
@@ -57,12 +78,18 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
         evidencia_bytes = page.screenshot(full_page=True)
         evidencia_base64 = base64.b64encode(evidencia_bytes).decode("utf-8")
 
+        if any(ch.isdigit() for ch in alvo):
+            mensagem = "Não foi possível retornar os dados no tempo de resposta solicitado"
+        else:
+            mensagem = f"Foram encontrados 0 resultados para o termo {alvo}"
+
         return {
             "zero": True,
             "evidencia_base64": evidencia_base64,
             "data_consulta": data_consulta,
             "hora_consulta": hora_consulta,
             "quantidade": 0,
+            "mensagem": mensagem,
         }
 
     # Seleciona o primeiro resultado quando houver

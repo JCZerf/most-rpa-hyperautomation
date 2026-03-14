@@ -7,8 +7,11 @@ SECRET_KEY = 'replace-me-in-production'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', SECRET_KEY)
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
-API_MASTER_KEY = os.getenv('API_MASTER_KEY')
+API_MASTER_KEY = os.getenv('API_MASTER_KEY')  # legado, manter para compatibilidade se necessário
 API_TOKEN_TTL = int(os.getenv('API_TOKEN_TTL', '600'))
+OAUTH_CLIENT_ID = os.getenv('OAUTH_CLIENT_ID')
+OAUTH_CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
+OAUTH_AUDIENCE = os.getenv('OAUTH_AUDIENCE', 'most-rpa-api')
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
@@ -28,14 +31,25 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'TransparencyBot API',
-    'DESCRIPTION': 'API para consultar robô de transparência',
+    'TITLE': 'API do Robô de Transparência',
+    'DESCRIPTION': (
+        'API para consultar dados no Portal da Transparência.\n\n'
+        'Fluxo recomendado:\n'
+        '1. Gere um token em /api/token/\n'
+        '2. Autorize no Swagger com "Bearer <token>"\n'
+        '3. Execute /api/consulta/ com os exemplos disponíveis'
+    ),
     'VERSION': '1.0.0',
+    # Usar servidor relativo para evitar CORS/mixed content no Swagger
     'SERVERS': [
-        {'url': 'http://127.0.0.1:8000', 'description': 'Local'},
+        {'url': '/', 'description': 'Atual'},
     ],
     'SECURITY': [
         {'bearerAuth': []},
+    ],
+    'TAGS': [
+        {'name': 'Autenticação', 'description': 'Emissão de token OAuth2 (client_credentials)'},
+        {'name': 'Consulta', 'description': 'Execução do robô de transparência'},
     ],
     'APPEND_COMPONENTS': {
         'securitySchemes': {
@@ -48,6 +62,10 @@ SPECTACULAR_SETTINGS = {
     },
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,
+        'tagsSorter': 'manual',
+        'operationsSorter': 'alpha',
+        'docExpansion': 'list',
+        'displayRequestDuration': True,
     },
 }
 

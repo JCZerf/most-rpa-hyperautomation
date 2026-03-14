@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: most-rpa-hyperautomation
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /ms-playwright
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: OAUTH_CLIENT_ID
+        sync: false
+      - key: OAUTH_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_AUDIENCE
+        value: most-rpa-api
+      - key: API_TOKEN_TTL
+        value: "600"
+      - key: ALLOWED_HOSTS
+        value: "most-rpa-hyperautomation.onrender.com,127.0.0.1,localhost"
+      - key: DEBUG
+        value: "False"

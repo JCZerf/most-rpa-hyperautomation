@@ -1,0 +1,61 @@
+name: E2E Smoke Tests
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '30 10 * * *'
+
+jobs:
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+          E2E_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
+          E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
+          E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
+        run: |
+          missing=0
+          for var in E2E_BASE_URL E2E_CLIENT_ID E2E_CLIENT_SECRET E2E_CONSULTA_BASE; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required secret: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Run E2E smoke test
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+          E2E_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
+          E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
+          E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
+          E2E_CONSULTA_REFINADA: ${{ secrets.E2E_CONSULTA_REFINADA }}
+        run: |
+          mkdir -p output/e2e-artifacts
+          pytest -q tests/test_e2e_smoke.py -m e2e --junitxml=output/e2e-artifacts/junit.xml
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts
+          path: output/e2e-artifacts
+          if-no-files-found: warn
+
