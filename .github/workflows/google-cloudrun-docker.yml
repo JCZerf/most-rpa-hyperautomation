@@ -56,7 +56,7 @@ jobs:
             OAUTH_AUDIENCE=most-rpa-api
             ALLOWED_HOSTS=.run.app\,localhost\,127.0.0.1
           flags: |
-            --memory=1Gi
+            --memory=2Gi
             --cpu=1
             --concurrency=1
             --timeout=180s
