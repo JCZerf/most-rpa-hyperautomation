@@ -18,12 +18,12 @@
 - **Fase 1 — Base técnica (concluída):** bot Playwright, API Django, autenticação, deploy Cloud Run, documentação Swagger.
 - **Fase 2 — Robustez e contrato (concluída):** padronização de erros/respostas, cobertura de testes unitários/API, documentação de payload e formato de retorno.
 - **Fase 3 — Validação real (em andamento):** execução E2E smoke pós-deploy, coleta de evidências dos cenários RF-01..RF-06 e validação de estabilidade.
-- **Fase 4 — Bônus hiperautomação (próxima):** workflow para acionar API, salvar JSON no Google Drive e registrar metadados/link no Google Sheets.
+- **Fase 4 — Bônus hiperautomação (em andamento):** ferramenta escolhida (**Make**); implementação do workflow para acionar API, salvar JSON no Google Drive e registrar metadados/link no Google Sheets.
 - **Fase 5 — Fechamento de entrega (próxima):** evidências finais para apresentação, right-sizing final e checklist de segurança/segredos.
 
 ## Backlog imediato (próximas implementações)
 - Implementar Parte 2 (bônus):
-  - Chamar `/api/token/` e `/api/consulta/` no orquestrador (Activepieces/Make/Zapier).
+  - Chamar `/api/token/` e `/api/consulta/` no Make.
   - Salvar JSON no Google Drive no padrão `[IDENTIFICADOR_UNICO]_[DATA_HORA].json`.
   - Atualizar linha no Google Sheets com identificador, nome, CPF (mascarado), data/hora e link do arquivo.
 - Incluir evidência no repositório/documentação da execução simultânea (2-3 consultas).

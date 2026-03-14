@@ -20,6 +20,11 @@
   - Opções: Cloud Build trigger vs GitHub Actions com WIF.  
   - Escolha: **GitHub Actions + WIF** porque o repositório já usa GH, reduz chaves estáticas e mantém pipeline único de build/push/deploy.
 
+- **Plataforma de hiperautomação (Parte 2 - bônus)**  
+  - Opções: Make vs Activepieces vs Zapier.  
+  - Escolha: **Make** pela velocidade de implementação no prazo do desafio, conectores nativos para Google Drive/Sheets e facilidade de demonstração em apresentação técnica.
+  - Trade-off: Activepieces oferece mais controle/self-host, porém com maior esforço inicial de configuração para este contexto de entrega rápida.
+
 - **Configuração/vars**  
   - Opções: Passar envs inline no deploy ou via Secret Manager.  
   - Escolha: **Inline + GitHub Secrets** por velocidade; anotado upgrade futuro para Secret Manager se houver tempo/compliance.
