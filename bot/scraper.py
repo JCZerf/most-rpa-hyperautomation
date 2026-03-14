@@ -1,25 +1,37 @@
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from playwright.sync_api import sync_playwright
 
 from .browser import create_browser_context
 from .navigation import perform_search
 from .extraction import extract_personal_info, extract_benefits
+from .validators import classificar_consulta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class TransparencyBot:
-    def __init__(self, headless: bool = True):
+    def __init__(self, headless: bool = True, alvo: Optional[str] = None, usar_refine: bool = False):
         self.headless = headless
         self.url_base = "https://portaldatransparencia.gov.br/"
-        self.alvo = "04031769644"
-        # PARAMETRO OPCIONAL: True para usar busca refinada, False para busca simples (Lupa)
-        self.usar_refine = False
+        self.alvo = alvo
+        # True para usar busca refinada, False para busca simples (Lupa)
+        self.usar_refine = usar_refine
 
     def run(self) -> Dict[str, Any]:
+        if not self.alvo:
+            return {"status": "invalid", "error": "Parâmetro 'alvo' não definido."}
+
+        valido, tipo, alvo_normalizado, motivo = classificar_consulta(self.alvo)
+        if not valido:
+            logger.warning(f"Entrada inválida: {self.alvo} -> {motivo}")
+            return {"status": "invalid", "error": motivo, "consulta": self.alvo}
+
+        # usa valor normalizado
+        self.alvo = alvo_normalizado
+
         with sync_playwright() as pw:
             browser, context, page = create_browser_context(
                 pw,

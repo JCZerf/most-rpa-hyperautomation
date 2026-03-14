@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 import os
 import sys
+from pathlib import Path
+
+# Load environment variables from .env if present (non-fatal if missing)
+try:
+    from dotenv import load_dotenv
+
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except Exception:
+    pass
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')

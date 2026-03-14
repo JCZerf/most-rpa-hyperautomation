@@ -3,3 +3,5 @@ tzdata
 djangorestframework==3.16.1
 djangorestframework==3.16.1
 drf-spectacular==0.29.0
+python-dotenv>=1.0.1
+PyJWT>=2.8.0

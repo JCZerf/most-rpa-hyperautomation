@@ -5,6 +5,8 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from bot.scraper import TransparencyBot
 
+MAX_ALVOS = 3
+
 # Configuração do logging
 logging.basicConfig(
     level=logging.INFO,
@@ -21,11 +23,13 @@ def executar_para_alvo(identificador_alvo):
     logger.info(f"Iniciando thread para o alvo: {identificador_alvo}")
     
     # Instancia o bot em modo headless conforme o desafio pede
-    bot = TransparencyBot(headless=True)
-    bot.alvo = identificador_alvo # Atribui o alvo dinamicamente
+    bot = TransparencyBot(headless=True, alvo=identificador_alvo)
     
     try:
         resultado = bot.run()
+        if resultado.get("status") == "invalid":
+            logger.error(f"Entrada inválida para {identificador_alvo}: {resultado.get('error')}")
+            return resultado
         
         # Salva o resultado individualmente
         out_dir = Path("output")
@@ -55,6 +59,9 @@ def main():
         "A LIDA PEREIRA FIALHO",
         "A ANNE CHRISTINE SILVA RIBEIRO", 
     ]
+
+    if len(lista_alvos) > MAX_ALVOS:
+        raise ValueError(f"Máximo permitido: {MAX_ALVOS} alvos por execução local")
 
     # max_workers define quantos navegadores abrirão AO MESMO TEMPO
     with ThreadPoolExecutor(max_workers=3) as executor:
