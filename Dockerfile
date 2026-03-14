@@ -2,6 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Defina caminho fixo para os browsers do Playwright (funciona em runtime e build)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 # Instala dependências do sistema para Playwright/Chromium
 RUN apt-get update && apt-get install -y \
     curl \
