@@ -52,5 +52,5 @@ COPY . .
 # Porta padrão para Cloud Run (ajusta via env PORT)
 EXPOSE 8080
 
-# Comando padrão: gunicorn lendo a porta do ambiente (fallback 8000 para dev local)
-CMD ["sh", "-c", "gunicorn web.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1"]
+# Comando padrão: timeout maior para requisições longas de scraping
+CMD ["sh", "-c", "gunicorn web.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-1} --threads ${GUNICORN_THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-600} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} --keep-alive ${GUNICORN_KEEPALIVE:-65}"]

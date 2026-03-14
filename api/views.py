@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -15,7 +16,7 @@ from .auth import issue_token, validate_token, scope_allows
 logger = logging.getLogger(__name__)
 
 MAX_BATCH = 3
-MAX_WORKERS = 3
+MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
 
 
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
