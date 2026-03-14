@@ -56,11 +56,15 @@ jobs:
             OAUTH_CLIENT_SECRET=${{ secrets.OAUTH_CLIENT_SECRET }}
             OAUTH_AUDIENCE=most-rpa-api
             ALLOWED_HOSTS=.run.app\,localhost\,127.0.0.1
+            BOT_MAX_WORKERS=1
+            GUNICORN_WORKERS=1
+            GUNICORN_THREADS=2
+            GUNICORN_TIMEOUT=600
           flags: |
-            --memory=2Gi
-            --cpu=1
+            --memory=4Gi
+            --cpu=2
             --concurrency=1
-            --timeout=180s
+            --timeout=900s
             --allow-unauthenticated
 
       - run: echo ${{ steps.deploy.outputs.url }}
