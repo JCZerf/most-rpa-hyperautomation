@@ -1,8 +1,13 @@
 name: Build and Deploy to Cloud Run
 on:
   push:
-    branches: [main]
-
+    branches: [main]        # automático na main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch a deployar'
+        default: main
+        required: true
 env:
   PROJECT_ID: most-rpa-hyperautomation-dev
   REGION: us-east1
@@ -17,9 +22,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || 'main' }}
 
       - id: auth
         uses: google-github-actions/auth@v2
