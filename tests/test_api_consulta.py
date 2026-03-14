@@ -136,3 +136,23 @@ def test_consulta_itens_refine_default_false_and_true_override(client, monkeypat
     assert len(calls) == 2
     assert calls[0]["refine"] is False
     assert calls[1]["refine"] is True
+
+
+def test_consulta_missing_param_returns_json_error(client):
+    resp = client.post("/api/consulta/", data={"refinar_busca": True}, format="json")
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "consulta" in data["error"]
+
+
+def test_consulta_batch_marks_error_status_item(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        return {"status": "error", "error": "falha de negocio"}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    payload = {"consultas": ["04031769644"], "refinar_busca": False}
+    resp = client.post("/api/consulta/", data=payload, format="json")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resultados"][0]["status"] == "error"

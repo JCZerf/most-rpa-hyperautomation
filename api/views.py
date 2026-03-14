@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework import serializers
@@ -40,6 +40,18 @@ def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
     bot = TransparencyBot(headless=True, alvo=str(consulta_param), usar_refine=bool(refine_param))
     resultado = bot.run()
     return resultado
+
+
+def _json_error(message: str, status_code: int) -> JsonResponse:
+    return JsonResponse({"status": "error", "error": message}, status=status_code)
+
+
+def _status_from_result(res: Dict[str, Any]) -> str:
+    if res.get("status") == "invalid":
+        return "invalid"
+    if res.get("status") == "error":
+        return "error"
+    return "ok"
 
 
 @extend_schema(
@@ -130,9 +142,9 @@ def consulta(request: Request):
         consultas = payload.get('consultas', [])
         refine_default = _resolve_refine_flag(payload, default=False)
         if len(consultas) == 0:
-            return HttpResponseBadRequest('Lista "consultas" vazia')
+            return _json_error('Lista "consultas" vazia', 400)
         if len(consultas) > MAX_BATCH:
-            return JsonResponse({"status": "error", "error": f"Máximo de {MAX_BATCH} consultas por requisição"}, status=400)
+            return _json_error(f"Máximo de {MAX_BATCH} consultas por requisição", 400)
         logger.info(
             "API chamada (batch consultas): %s refine_default=%s",
             [mascarar_identificador(str(c)) for c in consultas],
@@ -147,7 +159,7 @@ def consulta(request: Request):
                 c = consultas[idx]
                 try:
                     res = fut.result()
-                    status_item = "ok" if res.get("status") != "invalid" else "invalid"
+                    status_item = _status_from_result(res)
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando consulta %s", c)
@@ -158,9 +170,9 @@ def consulta(request: Request):
     if 'itens' in payload and isinstance(payload.get('itens'), list):
         itens = payload.get('itens', [])
         if len(itens) == 0:
-            return HttpResponseBadRequest('Lista "itens" vazia')
+            return _json_error('Lista "itens" vazia', 400)
         if len(itens) > MAX_BATCH:
-            return JsonResponse({"status": "error", "error": f"Máximo de {MAX_BATCH} itens por requisição"}, status=400)
+            return _json_error(f"Máximo de {MAX_BATCH} itens por requisição", 400)
         logger.info(
             "API chamada (itens): %s",
             [mascarar_identificador(str(i.get('consulta') or i.get('alvo'))) for i in itens],
@@ -174,7 +186,7 @@ def consulta(request: Request):
                 refine = _resolve_refine_flag(item, default=False)
                 ordered_inputs.append((c, refine))
                 if not c:
-                    resultados.append({"consulta": None, "status": "error", "error": 'Missing consulta in item'})
+                    resultados.append({"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'})
                     continue
                 future_map[executor.submit(_run_single, c, refine)] = idx
 
@@ -190,7 +202,7 @@ def consulta(request: Request):
                 c, refine = ordered_inputs[idx]
                 try:
                     res = fut.result()
-                    status_item = "ok" if res.get("status") != "invalid" else "invalid"
+                    status_item = _status_from_result(res)
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando item %s", c)
@@ -203,7 +215,7 @@ def consulta(request: Request):
     refine_param = _resolve_refine_flag(payload, default=False)
 
     if consulta_param is None:
-        return HttpResponseBadRequest('Missing "consulta" parameter')
+        return _json_error('Parâmetro "consulta" não informado', 400)
 
     logger.info(
         "API chamada: consulta=%s refine=%s",
@@ -267,18 +279,18 @@ def token(request: Request):
     from django.conf import settings as dj_settings
 
     if grant_type != "client_credentials":
-        return HttpResponseBadRequest('Missing or invalid "grant_type" (use client_credentials)')
+        return _json_error('Parâmetro "grant_type" ausente ou inválido (use client_credentials)', 400)
 
     if not client_id or not client_secret:
-        return HttpResponseBadRequest('Missing "client_id" or "client_secret"')
+        return _json_error('Parâmetros "client_id" e "client_secret" são obrigatórios', 400)
 
     expected_id = getattr(dj_settings, "OAUTH_CLIENT_ID", None)
     expected_secret = getattr(dj_settings, "OAUTH_CLIENT_SECRET", None)
     if not expected_id or not expected_secret:
-        return JsonResponse({"status": "error", "error": "OAuth client not configured"}, status=500)
+        return _json_error("Cliente OAuth não configurado", 500)
 
     if client_id != expected_id or client_secret != expected_secret:
-        return JsonResponse({"status": "error", "error": "Invalid client credentials"}, status=401)
+        return _json_error("Credenciais do cliente inválidas", 401)
 
     ttl = getattr(dj_settings, "API_TOKEN_TTL", 600)
     token_value, exp = issue_token(client_id, ttl, scope, dj_settings.OAUTH_AUDIENCE)

@@ -31,11 +31,17 @@ def test_token_invalid_key(client):
         format="json",
     )
     assert resp.status_code == 401
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "error" in data
 
 
 def test_token_missing_params(client):
     resp = client.post("/api/token/", data={"grant_type": "client_credentials"}, format="json")
     assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "client_id" in data["error"] or "client_secret" in data["error"]
 
 
 def test_token_invalid_grant(client):
@@ -45,3 +51,6 @@ def test_token_invalid_grant(client):
         format="json",
     )
     assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "grant_type" in data["error"]
