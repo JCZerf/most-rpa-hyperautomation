@@ -12,6 +12,22 @@ Principais modos de uso:
 - Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
 - `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
 
+## Estrutura do projeto
+```text
+most-rpa-hyperautomation/
+├── api/                      # Endpoints REST, autenticação e rotas da API
+├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
+├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
+├── tests/                    # Testes unitários/API (com mocks para o navegador)
+├── web/                      # Configuração Django (settings, urls, wsgi)
+├── .github/workflows/        # CI/CD e deploy no Cloud Run
+├── Dockerfile                # Build da imagem com dependências do Playwright
+├── main.py                   # Runner local para execuções em lote
+├── manage.py                 # Comando de gerenciamento Django
+├── requirements.txt          # Dependências Python
+└── README.md                 # Guia de uso e operação
+```
+
 ## Requisitos
 - Python 3.10+ (testado em Linux)
 - `pip install -r requirements.txt`
@@ -88,6 +104,7 @@ Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `
 
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
+- Não versione segredos reais no repositório. Use `example.env` como referência, mantenha `.env` fora do Git e injete credenciais via secrets do ambiente (ex.: GitHub Secrets/Cloud Run).
 
 ## Cenários de teste do desafio
 Os cenários fornecidos pela MOST estão documentados em `doc/02-requisito-do-projeto.md` (seção “Cenários de teste”). A suíte `pytest` cobre os casos de sucesso/erro por CPF/NIS e Nome, além de cenário com parcelas e evidências.

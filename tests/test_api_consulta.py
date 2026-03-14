@@ -77,3 +77,62 @@ def test_consulta_insufficient_scope(settings):
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     resp = api_client.post("/api/consulta/", data={"consulta": "FULANO"}, format="json")
     assert resp.status_code == 403
+
+
+def test_consulta_single_invalid_from_bot_returns_400(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        return {"status": "invalid", "error": "entrada invalida", "consulta": consulta_param}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE", "refine": False}, format="json")
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "invalid"
+    assert "error" in data
+
+
+def test_consulta_single_exception_returns_500(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        raise RuntimeError("falha interna")
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE", "refine": False}, format="json")
+    assert resp.status_code == 500
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "falha interna" in data["error"]
+
+
+def test_consulta_single_refine_true_is_forwarded(client, monkeypatch):
+    calls = []
+
+    def fake_run_single(consulta_param, refine_param):
+        calls.append({"consulta": consulta_param, "refine": refine_param})
+        return {"status": "ok", "pessoa": {"nome": "Teste"}, "beneficios": []}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE", "refine": True}, format="json")
+    assert resp.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["refine"] is True
+
+
+def test_consulta_itens_refine_default_false_and_true_override(client, monkeypatch):
+    calls = []
+
+    def fake_run_single(consulta_param, refine_param):
+        calls.append({"consulta": consulta_param, "refine": refine_param})
+        return {"status": "ok", "pessoa": {"nome": consulta_param}, "beneficios": []}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    payload = {
+        "itens": [
+            {"consulta": "A LIDA PEREIRA FIALHO"},
+            {"consulta": "A ANNE CHRISTINE SILVA RIBEIRO", "refine": True},
+        ]
+    }
+    resp = client.post("/api/consulta/", data=payload, format="json")
+    assert resp.status_code == 200
+    assert len(calls) == 2
+    assert calls[0]["refine"] is False
+    assert calls[1]["refine"] is True
