@@ -10,7 +10,7 @@ from drf_spectacular.types import OpenApiTypes
 
 from bot.scraper import TransparencyBot
 from bot.validators import mascarar_identificador
-from .auth import issue_token, validate_token
+from .auth import issue_token, validate_token, scope_allows
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,11 @@ def consulta(request: Request):
     if not auth_header.startswith("Bearer "):
         return JsonResponse({"status": "error", "error": "Missing bearer token"}, status=401)
     token = auth_header.replace("Bearer ", "", 1).strip()
-    valid, _claims = validate_token(token)
+    valid, claims = validate_token(token)
     if not valid:
         return JsonResponse({"status": "error", "error": "Invalid or expired token"}, status=401)
+    if not scope_allows(claims, ["bot:read"]):
+        return JsonResponse({"status": "error", "error": "Insufficient scope"}, status=403)
 
     # request is a DRF Request; use request.data for parsed JSON
     payload = request.data if isinstance(request.data, dict) else {}
@@ -162,10 +164,14 @@ def consulta(request: Request):
 @extend_schema(
     methods=['POST'],
     tags=["Auth"],
-    summary="Gera um JWT curto a partir de uma api_key",
-    description="Envie sua api_key (configurada pelo fornecedor) e receba um access_token JWT HS256 válido por API_TOKEN_TTL segundos.",
+    summary="Fluxo OAuth2 client_credentials simplificado (gera JWT HS256)",
+    description=(
+        "Envie client_id e client_secret (configurados via env) e receba um access_token JWT HS256 "
+        "com audience definida e escopos solicitados.\n"
+        "grant_type deve ser 'client_credentials'. Scope padrão: 'bot:read'."
+    ),
     examples=[
-        OpenApiExample('Token request', value={"api_key": "sua-api-master-key"}, request_only=True, media_type='application/json'),
+        OpenApiExample('Token request', value={"grant_type": "client_credentials", "client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET"}, request_only=True, media_type='application/json'),
     ],
     request=OpenApiTypes.OBJECT,
     responses=OpenApiTypes.OBJECT,
@@ -174,24 +180,30 @@ def consulta(request: Request):
 @api_view(['POST'])
 def token(request: Request):
     """
-    Recebe uma api_key (compartilhada) e devolve um access_token de curta duração.
+    Fluxo client_credentials: devolve access_token curto.
     """
-    api_key = request.data.get("api_key") if isinstance(request.data, dict) else None
-    if api_key is None:
-        return HttpResponseBadRequest('Missing "api_key"')
+    data = request.data if isinstance(request.data, dict) else {}
+    grant_type = data.get("grant_type")
+    client_id = data.get("client_id")
+    client_secret = data.get("client_secret")
+    scope = data.get("scope", "bot:read")
 
-    expected_key = getattr(request.settings, "API_MASTER_KEY", None) if hasattr(request, "settings") else None
-    # fallback: use environment variable directly via settings
     from django.conf import settings as dj_settings
-    if expected_key is None:
-        expected_key = getattr(dj_settings, "API_MASTER_KEY", None)
 
-    if not expected_key:
-        return JsonResponse({"status": "error", "error": "API master key not configured"}, status=500)
+    if grant_type != "client_credentials":
+        return HttpResponseBadRequest('Missing or invalid "grant_type" (use client_credentials)')
 
-    if api_key != expected_key:
-        return JsonResponse({"status": "error", "error": "Invalid api_key"}, status=401)
+    if not client_id or not client_secret:
+        return HttpResponseBadRequest('Missing "client_id" or "client_secret"')
+
+    expected_id = getattr(dj_settings, "OAUTH_CLIENT_ID", None)
+    expected_secret = getattr(dj_settings, "OAUTH_CLIENT_SECRET", None)
+    if not expected_id or not expected_secret:
+        return JsonResponse({"status": "error", "error": "OAuth client not configured"}, status=500)
+
+    if client_id != expected_id or client_secret != expected_secret:
+        return JsonResponse({"status": "error", "error": "Invalid client credentials"}, status=401)
 
     ttl = getattr(dj_settings, "API_TOKEN_TTL", 600)
-    token_value, exp = issue_token("api-client", ttl)
-    return JsonResponse({"access_token": token_value, "expires_in": ttl})
+    token_value, exp = issue_token(client_id, ttl, scope, dj_settings.OAUTH_AUDIENCE)
+    return JsonResponse({"access_token": token_value, "expires_in": ttl, "token_type": "Bearer", "scope": scope})

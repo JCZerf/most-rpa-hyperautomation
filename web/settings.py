@@ -7,8 +7,11 @@ SECRET_KEY = 'replace-me-in-production'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', SECRET_KEY)
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
-API_MASTER_KEY = os.getenv('API_MASTER_KEY')
+API_MASTER_KEY = os.getenv('API_MASTER_KEY')  # legado, manter para compatibilidade se necessário
 API_TOKEN_TTL = int(os.getenv('API_TOKEN_TTL', '600'))
+OAUTH_CLIENT_ID = os.getenv('OAUTH_CLIENT_ID')
+OAUTH_CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
+OAUTH_AUDIENCE = os.getenv('OAUTH_AUDIENCE', 'most-rpa-api')
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',

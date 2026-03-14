@@ -57,12 +57,18 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
         evidencia_bytes = page.screenshot(full_page=True)
         evidencia_base64 = base64.b64encode(evidencia_bytes).decode("utf-8")
 
+        if any(ch.isdigit() for ch in alvo):
+            mensagem = "Não foi possível retornar os dados no tempo de resposta solicitado"
+        else:
+            mensagem = f"Foram encontrados 0 resultados para o termo {alvo}"
+
         return {
             "zero": True,
             "evidencia_base64": evidencia_base64,
             "data_consulta": data_consulta,
             "hora_consulta": hora_consulta,
             "quantidade": 0,
+            "mensagem": mensagem,
         }
 
     # Seleciona o primeiro resultado quando houver

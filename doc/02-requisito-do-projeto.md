@@ -4,6 +4,8 @@
 - Geração de evidência (screenshot) convertida para Base64 e embutida na resposta.
 - Estrutura de resposta em JSON contendo panorama, detalhes de benefícios e imagem.
 - Logs de execução e falhas registrados pelo serviço Django.
+- Autenticação via JWT (HS256) emitido a partir de uma `api_key` (API_MASTER_KEY) e configurado por variáveis de ambiente.
+- Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL do token).
 
 ## Requisitos funcionais (MoSCoW)
 | ID | Descrição | Prioridade (MoSCoW) |
@@ -19,3 +21,24 @@
 - Sem intervenção manual durante a execução normal; falhas devem ser sinalizadas via log/retorno.
 - A automação depende da disponibilidade e layout do Portal da Transparência; mudanças podem exigir atualização de seletores.
 - O uso de dados pessoais deve seguir políticas internas e LGPD (armazenamento transitório, mínimo necessário).
+- Limite de 3 entradas por requisição (batch) e até 3 execuções paralelas para evitar sobrecarga.
+- Validação prévia de CPF/NIS/nomes; entradas inválidas são rejeitadas sem abrir navegador; logs mascaram identificadores.
+
+## Critérios de avaliação (do desafio)
+| Categoria | Detalhes esperados |
+|-----------|--------------------|
+| Funcionalidade | Execução correta do robô em todos os cenários de teste. |
+| Código | Legibilidade, modularização, tratamento de erros. |
+| Integrações | Uso eficiente da plataforma de workflow e das APIs do Google (se aplicável). |
+| Segurança | Boas práticas (OAuth 2.0/JWT, variáveis de ambiente). |
+| Documentação | README claro, comentários relevantes. |
+| Bônus | Parte 2 e/ou diferenciais (notificações, testes, etc.). |
+
+## Cenários de teste (MOST)
+| Cenário | Entrada | Saída esperada |
+|---------|---------|----------------|
+| Sucesso (CPF) | CPF ou NIS válido | JSON com dados coletados e evidência da tela. |
+| Erro (CPF) | CPF ou NIS inexistente | JSON com mensagem de erro: "Não foi possível retornar os dados no tempo de resposta solicitado". |
+| Sucesso (Nome) | Nome completo | JSON com dados do primeiro registro equivalente encontrado + evidência. |
+| Erro (Nome) | Nome inexistente | JSON com mensagem de erro: "Foram encontrados 0 resultados para o termo …". |
+| Filtrado | Sobrenome + filtro social | JSON com dados do primeiro registro equivalente encontrado + evidência. |

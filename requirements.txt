@@ -5,3 +5,5 @@ djangorestframework==3.16.1
 drf-spectacular==0.29.0
 python-dotenv>=1.0.1
 PyJWT>=2.8.0
+pytest>=8.2.0
+pytest-django>=4.8.0

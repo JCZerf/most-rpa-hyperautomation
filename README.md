@@ -33,11 +33,11 @@ python manage.py runserver 8000
 ```
 - Documentação interativa (Swagger): `http://127.0.0.1:8000/api/docs/`
 - Esquema OpenAPI (YAML/JSON): `http://127.0.0.1:8000/api/schema/`
-- Autorização: obtenha um token de acesso em `POST /api/token/` enviando sua `api_key`; use o token retornado no header `Authorization: Bearer <token>`. Tokens expiram após o TTL configurado.
+- Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. Tokens expiram após o TTL configurado (`API_TOKEN_TTL`).
 
-### Autenticação
-- Obtenha um **JWT** curto em `POST /api/token/` enviando `{"api_key": "<sua-chave>"}` (configurada em `.env` via `API_MASTER_KEY`).
-- Use o token retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens são assinados com HS256 e expiram após `API_TOKEN_TTL` segundos.
+### Autenticação (OAuth2 client_credentials simplificado)
+- `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`. `client_id`/`client_secret` vêm do `.env` (`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`).
+- Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens HS256, `aud` configurado por `OAUTH_AUDIENCE`, expiram após `API_TOKEN_TTL` segundos.
 
 ### Endpoint principal
 `POST /api/consulta/`
@@ -60,6 +60,12 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 
+## Testes
+```bash
+pytest
+```
+Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `/api/consulta/`) com mocks para evitar abrir o navegador.
+
 ## Estrutura de saída (resumo)
 - `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
@@ -72,3 +78,6 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
+
+## Cenários de teste do desafio
+Os cenários fornecidos pela MOST estão documentados em `doc/02-requisito-do-projeto.md` (seção “Cenários de teste”). A suíte `pytest` cobre os casos de sucesso/erro por CPF/NIS e Nome, além de cenário com parcelas e evidências.
