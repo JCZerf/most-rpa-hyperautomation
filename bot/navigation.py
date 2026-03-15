@@ -71,7 +71,7 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     _executar_etapa("abrir_portal", lambda: page.goto(url_base, wait_until="networkidle"))
 
     try:
-        page.get_by_role("button", name="acceptButtonLabel").click()
+        page.get_by_role("button", name="acceptButtonLabel").click(timeout=3000)
     except Exception:
         pass
 
