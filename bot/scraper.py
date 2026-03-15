@@ -48,59 +48,17 @@ class TransparencyBot:
             try:
                 # Navegação e busca
                 search_result = perform_search(page, self.url_base, self.alvo, self.usar_refine)
-                if search_result.get("blocked"):
-                    data_hora_consulta = search_result.get("data_hora_consulta")
-                    if not data_hora_consulta:
-                        data_consulta = search_result.get("data_consulta")
-                        hora_consulta = search_result.get("hora_consulta")
-                        data_hora_consulta = f"{data_consulta} {hora_consulta}".strip()
-
-                    return {
-                        "status": "blocked",
-                        "error": search_result.get("mensagem"),
-                        "pessoa": {
-                            "consulta": self.alvo,
-                            "nome": "N/A",
-                            "cpf": "N/A",
-                            "localidade": "N/A",
-                        },
-                        "beneficios": [],
-                        "meta": {
-                            "resultados_encontrados": 0,
-                            "evidencia_resultados_zero": search_result.get("evidencia_base64"),
-                            "data_consulta": search_result.get("data_consulta"),
-                            "hora_consulta": search_result.get("hora_consulta"),
-                            "data_hora_consulta": data_hora_consulta,
-                            "mensagem": search_result.get("mensagem"),
-                            "bloqueio_detectado": True,
-                            "next_interval_ms": search_result.get("next_interval_ms"),
-                            "detected_by": search_result.get("detected_by"),
-                        },
-                    }
-
                 if search_result.get("zero"):
-                    data_hora_consulta = search_result.get("data_hora_consulta")
-                    if not data_hora_consulta:
-                        data_consulta = search_result.get("data_consulta")
-                        hora_consulta = search_result.get("hora_consulta")
-                        data_hora_consulta = f"{data_consulta} {hora_consulta}".strip()
-
                     return {
                         "status": "error",
                         "error": search_result.get("mensagem"),
-                        "pessoa": {
-                            "consulta": self.alvo,
-                            "nome": "N/A",
-                            "cpf": "N/A",
-                            "localidade": "N/A",
-                        },
+                        "pessoa": {"consulta": self.alvo},
                         "beneficios": [],
                         "meta": {
                             "resultados_encontrados": 0,
                             "evidencia_resultados_zero": search_result.get("evidencia_base64"),
                             "data_consulta": search_result.get("data_consulta"),
                             "hora_consulta": search_result.get("hora_consulta"),
-                            "data_hora_consulta": data_hora_consulta,
                             "mensagem": search_result.get("mensagem"),
                         },
                     }
@@ -125,7 +83,6 @@ class TransparencyBot:
 
                 # Se nenhum benefício encontrado, montar retorno similar ao original
                 if not benefits_data.get("beneficios_encontrados"):
-                    data_hora_consulta = f"{benefits_data.get('data_consulta')} {benefits_data.get('hora_consulta')}".strip()
                     return {
                         "pessoa": {**pessoal, "nis": None, "quantidade_beneficios": 0},
                         "beneficios": [],
@@ -135,11 +92,9 @@ class TransparencyBot:
                             "evidencia_sem_beneficio": benefits_data.get("panorama_base64"),
                             "data_consulta": benefits_data.get("data_consulta"),
                             "hora_consulta": benefits_data.get("hora_consulta"),
-                            "data_hora_consulta": data_hora_consulta,
                         },
                     }
 
-                data_hora_consulta = f"{benefits_data.get('data_consulta')} {benefits_data.get('hora_consulta')}".strip()
                 resultado_final = {
                     "pessoa": {**pessoal, "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0)},
                     "beneficios": benefits_data.get("beneficios_resultado"),
@@ -149,7 +104,6 @@ class TransparencyBot:
                         "panorama_relacao": benefits_data.get("panorama_base64"),
                         "data_consulta": benefits_data.get("data_consulta"),
                         "hora_consulta": benefits_data.get("hora_consulta"),
-                        "data_hora_consulta": data_hora_consulta,
                     },
                 }
 

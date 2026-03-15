@@ -82,40 +82,9 @@ def test_bot_zero_result(monkeypatch, dummy_browser_ctx):
 
     assert result["meta"]["resultados_encontrados"] == 0
     assert result["pessoa"]["consulta"] == "FULANO TESTE"
-    assert result["pessoa"]["nome"] == "N/A"
-    assert result["pessoa"]["cpf"] == "N/A"
-    assert result["pessoa"]["localidade"] == "N/A"
     assert result["status"] == "error"
     assert "Não foi possível retornar" in result["error"]
     assert result["beneficios"] == []
-    assert result["meta"]["data_hora_consulta"] == "01/01/2026 12:00"
-
-
-def test_bot_bloqueio_waf(monkeypatch, dummy_browser_ctx):
-    def fake_search(page, url_base, alvo, usar_refine):
-        return {
-            "blocked": True,
-            "evidencia_base64": "abc",
-            "data_consulta": "01/01/2026",
-            "hora_consulta": "12:00",
-            "data_hora_consulta": "01/01/2026 12:00",
-            "mensagem": "Bloqueio temporário detectado pelo WAF do portal",
-            "next_interval_ms": 10000,
-            "detected_by": ["telemetry_next_interval"],
-        }
-
-    monkeypatch.setattr("bot.scraper.perform_search", fake_search)
-
-    bot = TransparencyBot(headless=True, alvo="FULANO TESTE")
-    result = bot.run()
-
-    assert result["status"] == "blocked"
-    assert result["pessoa"]["nome"] == "N/A"
-    assert result["pessoa"]["cpf"] == "N/A"
-    assert result["pessoa"]["localidade"] == "N/A"
-    assert result["meta"]["bloqueio_detectado"] is True
-    assert result["meta"]["next_interval_ms"] == 10000
-    assert result["meta"]["data_hora_consulta"] == "01/01/2026 12:00"
 
 
 def test_bot_sem_beneficio(monkeypatch, dummy_browser_ctx):
@@ -145,7 +114,6 @@ def test_bot_sem_beneficio(monkeypatch, dummy_browser_ctx):
     assert "evidencia_sem_beneficio" in result["meta"]
     assert result["meta"]["beneficios_encontrados"] == []
     assert result["meta"]["resultados_encontrados"] == 1
-    assert result["meta"]["data_hora_consulta"] == "01/01/2026 12:00"
 
 
 def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
@@ -175,7 +143,6 @@ def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
     assert result["beneficios"][0]["tipo"] == "Auxílio Brasil"
     assert result["meta"]["beneficios_encontrados"] == ["Auxílio Brasil"]
     assert result["meta"]["resultados_encontrados"] == 2
-    assert result["meta"]["data_hora_consulta"] == "01/01/2026 12:00"
 
 
 def test_bot_nome_inexistente(monkeypatch, dummy_browser_ctx):
@@ -196,12 +163,8 @@ def test_bot_nome_inexistente(monkeypatch, dummy_browser_ctx):
 
     assert result["meta"]["resultados_encontrados"] == 0
     assert result["pessoa"]["consulta"] == "NOME INEXISTENTE"
-    assert result["pessoa"]["nome"] == "N/A"
-    assert result["pessoa"]["cpf"] == "N/A"
-    assert result["pessoa"]["localidade"] == "N/A"
     assert result["status"] == "error"
     assert "0 resultados" in result["error"] or "0 resultados" in result["meta"]["mensagem"]
-    assert result["meta"]["data_hora_consulta"] == "01/01/2026 12:00"
 
 
 def test_bot_detalhe_parcelas(monkeypatch, dummy_browser_ctx):
