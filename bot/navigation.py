@@ -40,7 +40,9 @@ def _score_nome_proximidade(alvo: str, candidato: str) -> int:
     acertos = sum(1 for t in tokens if t in cand_n)
     ratio = acertos / len(tokens)
     bonus_inicio = 0.05 if cand_n.startswith(tokens[0]) else 0
-    return int((ratio + bonus_inicio) * 100)
+    # Score fuzzy nunca deve superar um match exato (100).
+    fuzzy = int((ratio + bonus_inicio) * 100)
+    return min(fuzzy, 99)
 
 
 def _escolher_indice_nome_mais_proximo(alvo: str, nomes_encontrados: List[str]) -> Tuple[Optional[int], int]:

@@ -20,3 +20,13 @@ def test_escolher_indice_nome_mais_proximo():
     idx, score = _escolher_indice_nome_mais_proximo("A ANNE CHRISTINE SILVA RIBEIRO", nomes)
     assert idx == 1
     assert score >= 90
+
+
+def test_escolher_indice_prioriza_match_exato_sobre_fuzzy():
+    nomes = [
+        "MARIA MADALENA SILVA",
+        "MARIA MADALENA DA SILVA",
+    ]
+    idx, score = _escolher_indice_nome_mais_proximo("Maria Madalena da Silva", nomes)
+    assert idx == 1
+    assert score == 100

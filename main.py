@@ -55,7 +55,7 @@ def main():
     
     # LISTA DE ALVOS PARA EXECUÇÃO SIMULTÂNEA
     lista_alvos = [
-        "A ANNE CHRISTINE SILVA RIBEIRO", 
+        "Maria Madalena da Silva", 
     ]
 
     if len(lista_alvos) > MAX_ALVOS:
