@@ -12,6 +12,13 @@ Principais modos de uso:
 - Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
 - Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
 - `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
+- GitHub Actions para integração contínua (testes/smoke) e entrega contínua controlada no Cloud Run.
+
+## Integração contínua e entrega
+- **CI (integração contínua):** workflows no GitHub Actions para validações e smoke test (`.github/workflows/e2e-smoke.yml`).
+- **CD (deploy):** workflow de build/deploy no Cloud Run (`.github/workflows/google-cloudrun-docker.yml`).
+- **Política de gatilho do deploy:** execução **manual** (`workflow_dispatch`) ou **automática apenas por tag de versão** (`push tags: v*`).
+- **Sem deploy automático por commit/merge em branch**.
 
 ## Estrutura do projeto
 ```text
