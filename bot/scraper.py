@@ -32,7 +32,7 @@ class TransparencyBot:
     @staticmethod
     def _agora_consulta() -> str:
         agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
-        return agora.strftime("%d/%m/%Y %H:%M")
+        return agora.strftime("%d/%m/%Y - %H:%M")
 
     def _normalizar_pessoa(self, pessoa: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         src = pessoa or {}
