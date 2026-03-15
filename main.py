@@ -34,7 +34,7 @@ def _anexar_tempo_execucao(resultado, duracao_ms):
     return resultado
 
 
-def executar_para_alvo(identificador_alvo, headless=False, usar_refine=False):
+def executar_para_alvo(identificador_alvo, headless=True, usar_refine=False):
     """Função que será executada em paralelo para cada CPF/Nome."""
     logger.info(f"Iniciando thread para o alvo: {identificador_alvo}")
     inicio = time.perf_counter()
@@ -80,14 +80,14 @@ def main():
     # ===== CONFIGURAÇÃO RÁPIDA DE TESTE (EDITE AQUI) =====
     TEST_CONFIG = {
         # "um" = executa só um alvo | "grupo" = executa lista de alvos
-        "modo_execucao": "grupo",
+        "modo_execucao": "um",
         "alvo_unico": "04031769644",
         "grupo_alvos": [
             "04031769644",
             "A ANNE CHRISTINE SILVA RIBEIRO",
             "A LIDA PEREIRA FIALHO",
         ],
-        "headless": False,       # True = sem abrir janela | False = visual
+        "headless": True,       # True = sem abrir janela | False = visual
         "refinar_busca": False,  # True = usa filtro beneficiário | False = busca simples
         "max_workers": 3,        # máximo de threads no modo grupo
     }
