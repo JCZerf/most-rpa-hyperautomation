@@ -4,6 +4,7 @@ import base64
 import re
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
+from .logging_utils import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     # Captura panorama
     panorama_bytes = page.screenshot(full_page=True)
     panorama_base64 = base64.b64encode(panorama_bytes).decode("utf-8")
-    logger.info("Panorama capturado em base64.")
+    log_event(logger, logging.INFO, "panorama_capturado")
 
     beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
     beneficios_encontrados: List[str] = []
@@ -50,7 +51,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
             beneficios_encontrados.append(b)
 
     # log resumo inicial de benefícios detectados
-    logger.info(f"Benefícios detectados no painel: {beneficios_encontrados}")
+    log_event(logger, logging.INFO, "beneficios_detectados_painel", beneficios=beneficios_encontrados)
 
     if not beneficios_encontrados:
         agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
@@ -75,7 +76,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     beneficios_resultado: List[Dict[str, Any]] = []
     blocos = page.locator("#accordion-recebimentos-recursos .br-table")
     total_blocos = blocos.count()
-    logger.info(f"Iniciando extração de {total_blocos} blocos de benefícios.")
+    log_event(logger, logging.INFO, "inicio_extracao_beneficios", total_blocos=total_blocos)
     for i in range(total_blocos):
         bloco = blocos.nth(i)
         try:
@@ -83,7 +84,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
         except Exception:
             tipo = bloco.inner_text().strip().split('\n', 1)[0][:50]
 
-        logger.info(f"Extraindo benefício {i+1}/{total_blocos}: {tipo}")
+        log_event(logger, logging.INFO, "extraindo_beneficio", indice=i + 1, total=total_blocos, tipo=tipo)
 
         try:
             cols = bloco.locator("table tbody tr td")
@@ -190,14 +191,14 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     detalhe_evidence_b64 = None
 
-                logger.info(f"Finalizado detalhe para {tipo}: {len(detalhe_parcelas)} parcelas extraídas")
+                log_event(logger, logging.INFO, "detalhe_beneficio_finalizado", tipo=tipo, parcelas=len(detalhe_parcelas))
 
                 try:
                     nova_pagina.close()
                 except Exception:
                     pass
             except Exception as e:
-                logger.warning(f"Falha ao abrir detalhe para {tipo}: {e}")
+                log_event(logger, logging.WARNING, "falha_abrir_detalhe_beneficio", tipo=tipo, erro=str(e))
 
         beneficios_resultado.append({
             "tipo": tipo,

@@ -22,8 +22,9 @@
 - **Fase 5 — Fechamento de entrega (em andamento):** consolidação de evidências finais para apresentação, right-sizing final e checklist de segurança/segredos.
 
 ## Backlog imediato (próximas implementações)
-- Consolidar evidência versionada do cenário ponta a ponta da Parte 2 (run do Make + arquivo no Drive + linha no Sheets + frontend de disparo via webhook).
-- Consolidar política de retenção/expurgo para evidências em Base64 no fluxo externo (Make/Google).
+- Formalizar política de retenção e expurgo no fluxo externo (Make -> Google Drive/Sheets), com prazos e responsáveis.
+- Aplicar minimização de dados no payload persistido externamente (mascaramento/remoção de campos não essenciais).
+- Definir governança de acesso (permissões, trilha de auditoria e revisão periódica) para pasta do Drive e planilha do Sheets.
 
 ## Evidências registradas
 - E2E smoke pós-deploy (run `23096919987`, status: aprovado): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
@@ -34,15 +35,18 @@
 - Metadados da rodada manual atualizada: [README da evidência manual](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
 - Evidências de desempenho em homologação (14/03/2026 19h): [performance-hml](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h)
 - Evidências da documentação interativa e autenticação: [api-docs](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h)
+- Evidência de integração com Google Sheets: [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
+- Evidência do fluxo no Make: [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
 
 ## Ações em aberto
-- Versionar evidências finais da execução ponta a ponta da Parte 2 (Make/Drive/Sheets/frontend).
 - Ajustar right-sizing de infraestrutura após coleta de métricas (memória, latência e taxa de erro), mantendo estabilidade como prioridade.
-- Definir política de retenção/expurgo para evidências em Base64 no consumo downstream (governança LGPD).
+- Formalizar e implementar política de retenção/expurgo no consumo downstream (Drive/Sheets), incluindo rotina automatizada de limpeza.
+- Revisar permissões e trilha de auditoria das integrações externas (Make, Google Drive e Google Sheets).
 - Opcional de evolução: ampliar navegação para abas/tabelas adicionais de detalhe, se o escopo pós-desafio exigir maior cobertura funcional.
 
 ## Nota LGPD (retenção e expurgo)
-- A solução não utiliza banco de dados para persistência de consultas; o processamento ocorre em memória e a resposta é devolvida na API.
-- As evidências em Base64 são transitórias no ciclo da requisição/resposta.
-- Não há retenção operacional de histórico de dados pessoais na aplicação.
-- Exceção: artefatos de homologação/evidência técnica gerados manualmente para o desafio podem ser removidos após o processo avaliativo.
+- A API não utiliza banco de dados para persistência de consultas; o processamento principal ocorre em memória e a resposta é devolvida ao cliente.
+- No fluxo externo de hiperautomação (Make -> Google Drive/Google Sheets), há persistência de dados/artefatos, conforme evidências desta entrega.
+- Portanto, retenção e expurgo devem ser tratados no downstream (Make/Drive/Sheets), com política explícita de prazo, base legal e controle de acesso.
+- As evidências em Base64 são transitórias na API, mas podem ser armazenadas externamente quando o fluxo de integração estiver habilitado.

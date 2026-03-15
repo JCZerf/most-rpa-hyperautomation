@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, inline_serializ
 from drf_spectacular.types import OpenApiTypes
 
 from bot.scraper import TransparencyBot
+from bot.logging_utils import log_event
 from bot.validators import mascarar_identificador
 from .auth import issue_token, validate_token, scope_allows
 
@@ -199,10 +200,12 @@ def consulta(request: Request):
             return _json_error('Lista "consultas" vazia', 400)
         if len(consultas) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} consultas por requisição", 400)
-        logger.info(
-            "API chamada (batch consultas): %s refine_default=%s",
-            [mascarar_identificador(str(c)) for c in consultas],
-            refine_default,
+        log_event(
+            logger,
+            logging.INFO,
+            "api_batch_consultas_recebida",
+            consultas=[mascarar_identificador(str(c)) for c in consultas],
+            refine_default=refine_default,
         )
         workers = min(MAX_WORKERS, len(consultas))
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -214,6 +217,14 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "api_batch_item_processado",
+                        consulta=mascarar_identificador(str(c)),
+                        status=status_item,
+                        id_consulta=res.get("id_consulta", "-"),
+                    )
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando consulta %s", c)
@@ -227,9 +238,11 @@ def consulta(request: Request):
             return _json_error('Lista "itens" vazia', 400)
         if len(itens) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} itens por requisição", 400)
-        logger.info(
-            "API chamada (itens): %s",
-            [mascarar_identificador(str(i.get('consulta') or i.get('alvo'))) for i in itens],
+        log_event(
+            logger,
+            logging.INFO,
+            "api_batch_itens_recebida",
+            consultas=[mascarar_identificador(str(i.get('consulta') or i.get('alvo'))) for i in itens],
         )
         workers = min(MAX_WORKERS, len(itens))
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -257,6 +270,14 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "api_item_processado",
+                        consulta=mascarar_identificador(str(c)),
+                        status=status_item,
+                        id_consulta=res.get("id_consulta", "-"),
+                    )
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando item %s", c)
@@ -271,13 +292,23 @@ def consulta(request: Request):
     if consulta_param is None:
         return _json_error('Parâmetro "consulta" não informado', 400)
 
-    logger.info(
-        "API chamada: consulta=%s refine=%s",
-        mascarar_identificador(str(consulta_param)),
-        refine_param,
+    log_event(
+        logger,
+        logging.INFO,
+        "api_consulta_recebida",
+        consulta=mascarar_identificador(str(consulta_param)),
+        refine=refine_param,
     )
     try:
         resultado = _run_single(consulta_param, refine_param)
+        log_event(
+            logger,
+            logging.INFO,
+            "api_consulta_processada",
+            consulta=mascarar_identificador(str(consulta_param)),
+            status=_status_from_result(resultado),
+            id_consulta=resultado.get("id_consulta", "-"),
+        )
         if resultado.get("status") == "invalid":
             return JsonResponse(resultado, status=400, safe=False)
         return JsonResponse(resultado, safe=False)

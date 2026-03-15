@@ -5,6 +5,7 @@ import re
 import unicodedata
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Tuple
+from .logging_utils import log_event
 
 logger = logging.getLogger(__name__)
 STOPWORDS_NOME = {"A", "O", "AS", "OS", "DE", "DA", "DO", "DAS", "DOS", "E"}
@@ -59,7 +60,7 @@ def _escolher_indice_nome_mais_proximo(alvo: str, nomes_encontrados: List[str]) 
 
 
 def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Dict[str, Any]:
-    logger.info(f"Iniciando busca para: {alvo}")
+    log_event(logger, logging.INFO, "inicio_busca", alvo=alvo, url_base=url_base, usar_refine=usar_refine)
     page.goto(url_base, wait_until="networkidle")
 
     try:
@@ -75,7 +76,7 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     input_busca.fill(alvo)
 
     if usar_refine:
-        logger.info("Fluxo: Busca Refinada selecionado.")
+        log_event(logger, logging.INFO, "fluxo_refinado")
         refine_button = page.get_by_role("button", name="Refine a Busca")
         try:
             refine_button.click(timeout=5000)
@@ -101,7 +102,7 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
 
         page.locator("#btnConsultarPF").click()
     else:
-        logger.info("Fluxo: Busca Simples (Lupa) selecionado.")
+        log_event(logger, logging.INFO, "fluxo_simples")
         page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click()
 
     page.wait_for_load_state("networkidle")
@@ -111,13 +112,13 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     page.wait_for_function("document.querySelector('#countResultados').innerText.trim() !== ''")
     quantidade_texto = contador_locator.inner_text().strip()
     quantidade = int(quantidade_texto.replace('.', '')) if quantidade_texto else 0
-    logger.info(f"Resultados encontrados: {quantidade}")
+    log_event(logger, logging.INFO, "resultados_encontrados", quantidade=quantidade)
 
     indice_escolhido = 0
     if quantidade > 0:
         links_nomes = page.locator(".link-busca-nome")
         if any(ch.isdigit() for ch in alvo):
-            logger.info("Termo contém dígitos; pulando comparação por nome (consulta por NIS/CPF).")
+            log_event(logger, logging.INFO, "comparacao_nome_pulada", motivo="consulta_por_digitos")
         else:
             total_links = links_nomes.count()
             nomes_encontrados: List[str] = []
@@ -128,16 +129,18 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
                     nomes_encontrados.append("")
             idx_melhor, score_melhor = _escolher_indice_nome_mais_proximo(alvo, nomes_encontrados)
             if idx_melhor is None:
-                logger.warning("Não foi possível calcular melhor correspondência para '%s'. Usando primeiro resultado.", alvo)
+                log_event(logger, logging.WARNING, "nome_proximo_indefinido_fallback_primeiro", alvo=alvo)
                 indice_escolhido = 0
             else:
                 indice_escolhido = idx_melhor
-                logger.info(
-                    "Selecionando resultado mais próximo para '%s': índice=%s score=%s nome='%s'",
-                    alvo,
-                    indice_escolhido,
-                    score_melhor,
-                    nomes_encontrados[indice_escolhido],
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "nome_mais_proximo_selecionado",
+                    alvo=alvo,
+                    indice=indice_escolhido,
+                    score=score_melhor,
+                    nome=nomes_encontrados[indice_escolhido],
                 )
 
     if quantidade == 0:

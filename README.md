@@ -110,13 +110,14 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 ```json
 {
   "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-  "data_hora_consulta": "14/03/2026 10:30",
+  "data_hora_consulta": "14/03/2026 - 10:30",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "NOME DA PESSOA",
     "cpf": "***.***.***-**",
     "localidade": "UF",
-    "quantidade_beneficios": 1
+    "quantidade_beneficios": 1,
+    "total_recursos_favorecidos": "R$ 600,00"
   },
   "beneficios": [
     {
@@ -139,12 +140,14 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
   ],
   "meta": {
     "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-    "data_hora_consulta": "14/03/2026 10:30",
+    "data_hora_consulta": "14/03/2026 - 10:30",
     "resultados_encontrados": 1,
     "beneficios_encontrados": [
       "Auxílio Brasil"
     ],
-    "panorama_relacao": "<base64>"
+    "panorama_relacao": "<base64>",
+    "total_valor_recebido": 600.0,
+    "total_valor_recebido_formatado": "R$ 600,00"
   }
 }
 ```
@@ -153,55 +156,29 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 ```json
 {
   "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-  "data_hora_consulta": "14/03/2026 10:31",
+  "data_hora_consulta": "14/03/2026 - 10:31",
   "status": "error",
   "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "N/A",
     "cpf": "N/A",
-    "localidade": "N/A"
+    "localidade": "N/A",
+    "total_recursos_favorecidos": "R$ 0,00"
   },
   "beneficios": [],
   "meta": {
     "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-    "data_hora_consulta": "14/03/2026 10:31",
+    "data_hora_consulta": "14/03/2026 - 10:31",
     "resultados_encontrados": 0,
     "evidencia_resultados_zero": "<base64>",
-    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado"
+    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
+    "total_valor_recebido": 0.0,
+    "total_valor_recebido_formatado": "R$ 0,00"
   }
 }
 ```
-
-#### 3) Consulta bloqueada por proteção do portal (`200 OK` com bloqueio operacional)
-```json
-{
-  "status": "blocked",
-  "error": "Bloqueio temporário detectado pelo WAF do portal",
-  "pessoa": {
-    "consulta": "NOME COMPLETO",
-    "nome": "N/A",
-    "cpf": "N/A",
-    "localidade": "N/A"
-  },
-  "beneficios": [],
-  "meta": {
-    "resultados_encontrados": 0,
-    "evidencia_resultados_zero": "<base64>",
-    "data_consulta": "15/03/2026",
-    "hora_consulta": "00:44",
-    "data_hora_consulta": "15/03/2026 00:44",
-    "mensagem": "Bloqueio temporário detectado pelo WAF do portal",
-    "bloqueio_detectado": true,
-    "next_interval_ms": 10000,
-    "detected_by": [
-      "telemetry_next_interval"
-    ]
-  }
-}
-```
-
-#### 4) Lote (`200 OK`)
+#### 3) Lote (`200 OK`)
 ```json
 {
   "resultados": [
@@ -210,7 +187,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
       "status": "ok",
       "resultado": {
         "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-        "data_hora_consulta": "14/03/2026 10:30",
+        "data_hora_consulta": "14/03/2026 - 10:30",
         "pessoa": {
           "consulta": "04031769644",
           "nome": "NOME DA PESSOA",
@@ -220,7 +197,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
         "beneficios": [],
         "meta": {
           "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-          "data_hora_consulta": "14/03/2026 10:30"
+          "data_hora_consulta": "14/03/2026 - 10:30"
         }
       }
     },
@@ -231,7 +208,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
         "status": "invalid",
         "error": "...",
         "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-        "data_hora_consulta": "14/03/2026 10:32",
+        "data_hora_consulta": "14/03/2026 - 10:32",
         "pessoa": {
           "consulta": "NOME INEXISTENTE",
           "nome": "N/A",
@@ -240,15 +217,14 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
         },
         "meta": {
           "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-          "data_hora_consulta": "14/03/2026 10:32"
+          "data_hora_consulta": "14/03/2026 - 10:32"
         }
       }
     }
   ]
 }
 ```
-
-#### 5) Erros de protocolo/segurança
+#### 4) Erros de protocolo/segurança
 
 | HTTP | Quando acontece | Exemplo |
 |------|------------------|---------|
@@ -317,12 +293,17 @@ E2E_REQUIRE_SUCCESS=true \
 - Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
 - Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
 
+### Evidências de integrações externas
+- Google Sheets (registro da execução): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Google Drive (arquivo gerado): [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
+- Make (workflow/orquestração): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+
 ## Estrutura de saída (resumo)
 - `id_consulta`: UUID da execução (sempre presente).
-- `data_hora_consulta`: timestamp único da consulta (`dd/mm/aaaa HH:MM`, sempre presente).
-- `pessoa`: `consulta`, `nome`, `cpf`, `localidade`, `quantidade_beneficios`… (campos básicos com `N/A` quando ausentes).
+- `data_hora_consulta`: timestamp único da consulta (`dd/mm/aaaa - HH:MM`, sempre presente).
+- `pessoa`: `consulta`, `nome`, `cpf`, `localidade`, `quantidade_beneficios`, `total_recursos_favorecidos`… (campos básicos com `N/A` quando ausentes).
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
-- `meta`: inclui também `id_consulta` e `data_hora_consulta` para auditoria, além de `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64) e evidências.
+- `meta`: inclui também `id_consulta`, `data_hora_consulta`, `total_valor_recebido`, `total_valor_recebido_formatado`, além de `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64) e evidências.
 
 ## Boas práticas e troubleshooting
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
@@ -333,10 +314,11 @@ E2E_REQUIRE_SUCCESS=true \
 - Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
 
 ## Segurança
-Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
+Uso apenas para fins legais; trate dados pessoais conforme LGPD.
 - Não versione segredos reais no repositório. Use `example.env` como referência, mantenha `.env` fora do Git e injete credenciais via secrets do ambiente (ex.: GitHub Secrets/Cloud Run).
-- A aplicação não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta da API.
-- Evidências em Base64 são tratadas como transitórias; artefatos de homologação/documentação existem apenas para fins de validação técnica do desafio.
+- A API não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta.
+- No fluxo externo de hiperautomação (Make -> Google Drive/Google Sheets), há persistência de artefatos/dados; aplique política de retenção/expurgo, controle de acesso e minimização de dados.
+- Evidências em Base64 são transitórias no fluxo da API, mas podem ser armazenadas externamente quando integrações estiverem habilitadas.
 
 ## Cenários de teste do desafio
 Os cenários fornecidos pela MOST estão documentados em `doc/02-requisito-do-projeto.md` (seção “Cenários de teste”). A suíte `pytest` cobre os casos de sucesso/erro por CPF/NIS e Nome, além de cenário com parcelas e evidências.
