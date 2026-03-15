@@ -228,6 +228,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
+
                 if _detectar_verificacao_humana(nova_pagina):
                     detalhe_status = "human_verification"
                     detalhe_mensagem = (
