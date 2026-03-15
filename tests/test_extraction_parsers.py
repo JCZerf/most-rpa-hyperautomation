@@ -1,4 +1,5 @@
 from bot.extraction import (
+    _detectar_verificacao_humana,
     _parse_linha_disponibilizado,
     _parse_linha_generica,
     _parse_linha_valores_recebidos,
@@ -40,3 +41,14 @@ def test_parse_linhas_insuficientes_retorna_none():
     assert _parse_linha_valores_recebidos(["a"]) is None
     assert _parse_linha_disponibilizado(["a"]) is None
     assert _parse_linha_valores_sacados(["a"]) is None
+
+
+def test_detectar_verificacao_humana():
+    class FakePage:
+        def title(self):
+            return "Human Verification"
+
+        def inner_text(self, *_args, **_kwargs):
+            return "Vamos confirmar que você é humano"
+
+    assert _detectar_verificacao_humana(FakePage()) is True

@@ -87,7 +87,7 @@ def main():
             "A ANNE CHRISTINE SILVA RIBEIRO",
             "A LIDA PEREIRA FIALHO",
         ],
-        "headless": True,       # True = sem abrir janela | False = visual
+        "headless": False,       # True = sem abrir janela | False = visual
         "refinar_busca": False,  # True = usa filtro beneficiário | False = busca simples
         "max_workers": 3,        # máximo de threads no modo grupo
     }

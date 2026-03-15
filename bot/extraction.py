@@ -1,6 +1,7 @@
 import logging
 import datetime
 import base64
+import unicodedata
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 from .logging_utils import log_event
@@ -127,6 +128,34 @@ def _coletar_detalhe_parcelas(nova_pagina: Any) -> List[Dict[str, str]]:
     return []
 
 
+def _detectar_verificacao_humana(nova_pagina: Any) -> bool:
+    def _normalizar(texto: str) -> str:
+        base = unicodedata.normalize("NFD", texto or "")
+        base = "".join(ch for ch in base if unicodedata.category(ch) != "Mn")
+        return base.lower()
+
+    try:
+        titulo = _normalizar(nova_pagina.title() or "")
+    except Exception:
+        titulo = ""
+
+    try:
+        corpo = _normalizar(nova_pagina.inner_text("body", timeout=2000) or "")
+    except Exception:
+        corpo = ""
+
+    sinais = [
+        "human verification",
+        "vamos confirmar que voce e humano",
+        "conclua a verificacao de seguranca antes de continuar",
+        "essa etapa verifica se voce nao e um bot",
+        "evitar spam",
+        "iniciar",
+    ]
+    texto = f"{titulo}\n{corpo}"
+    return any(s in texto for s in sinais)
+
+
 def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     # Captura panorama
     panorama_bytes = page.screenshot(full_page=True)
@@ -185,6 +214,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
 
         detalhe_parcelas: List[Dict[str, str]] = []
         detalhe_evidence_b64 = None
+        detalhe_status = "ok"
+        detalhe_mensagem = None
 
         if href:
             try:
@@ -197,13 +228,27 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-                detalhe_parcelas = _coletar_detalhe_parcelas(nova_pagina)
+                if _detectar_verificacao_humana(nova_pagina):
+                    detalhe_status = "human_verification"
+                    detalhe_mensagem = (
+                        "Vamos confirmar que você é humano. Conclua a verificação de segurança antes de continuar."
+                    )
+                    log_event(
+                        logger,
+                        logging.WARNING,
+                        "verificacao_humana_detectada_detalhe",
+                        tipo=tipo,
+                        detalhe_url=detalhe_url,
+                    )
+                else:
+                    detalhe_parcelas = _coletar_detalhe_parcelas(nova_pagina)
 
-                try:
-                    bytes_det = nova_pagina.screenshot(full_page=True)
-                    detalhe_evidence_b64 = base64.b64encode(bytes_det).decode("utf-8")
-                except Exception:
-                    detalhe_evidence_b64 = None
+                if detalhe_status == "ok":
+                    try:
+                        bytes_det = nova_pagina.screenshot(full_page=True)
+                        detalhe_evidence_b64 = base64.b64encode(bytes_det).decode("utf-8")
+                    except Exception:
+                        detalhe_evidence_b64 = None
 
                 log_event(logger, logging.INFO, "detalhe_beneficio_finalizado", tipo=tipo, parcelas=len(detalhe_parcelas))
 
@@ -220,6 +265,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
             "valor_recebido": valor_recebido,
             "detalhe_href": href,
             "detalhe_evidencia": detalhe_evidence_b64,
+            "detalhe_status": detalhe_status,
+            "detalhe_mensagem": detalhe_mensagem,
             "parcelas": detalhe_parcelas,
         })
 
