@@ -1,10 +1,33 @@
 import logging
 import datetime
 import base64
+import re
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+
+def _valor_texto_para_float(texto: str) -> float:
+    if not texto:
+        return 0.0
+    # Ex.: "R$ 1.234,56" -> 1234.56
+    limpo = re.sub(r"[^\d,.-]", "", texto)
+    if not limpo:
+        return 0.0
+    if "," in limpo:
+        limpo = limpo.replace(".", "").replace(",", ".")
+    try:
+        return float(limpo)
+    except Exception:
+        return 0.0
+
+
+def _formatar_brl(valor: float) -> str:
+    bruto = f"{valor:,.2f}"
+    # "1,234.56" -> "1.234,56"
+    br = bruto.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {br}"
 
 
 def extract_personal_info(page: Any) -> Dict[str, str]:
@@ -36,6 +59,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
         return {
             "beneficios_encontrados": beneficios_encontrados,
             "panorama_base64": panorama_base64,
+            "total_valor_recebido": 0.0,
+            "total_valor_recebido_formatado": _formatar_brl(0.0),
             "resultado": {
                 "beneficios": [],
                 "meta": {
@@ -188,11 +213,14 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     hora_consulta = agora.strftime("%H:%M")
 
     quantidade_beneficios = len(beneficios_resultado)
+    total_valor_recebido = sum(_valor_texto_para_float(b.get("valor_recebido", "")) for b in beneficios_resultado)
 
     return {
         "beneficios_resultado": beneficios_resultado,
         "beneficios_encontrados": beneficios_encontrados,
         "quantidade_beneficios": quantidade_beneficios,
+        "total_valor_recebido": total_valor_recebido,
+        "total_valor_recebido_formatado": _formatar_brl(total_valor_recebido),
         "panorama_base64": panorama_base64,
         "data_consulta": data_consulta,
         "hora_consulta": hora_consulta,

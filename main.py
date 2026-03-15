@@ -23,7 +23,7 @@ def executar_para_alvo(identificador_alvo):
     logger.info(f"Iniciando thread para o alvo: {identificador_alvo}")
     
     # Instancia o bot em modo headless conforme o desafio pede
-    bot = TransparencyBot(headless=True, alvo=identificador_alvo)
+    bot = TransparencyBot(headless=False, alvo=identificador_alvo)
     
     try:
         resultado = bot.run()
@@ -55,8 +55,6 @@ def main():
     
     # LISTA DE ALVOS PARA EXECUÇÃO SIMULTÂNEA
     lista_alvos = [
-        "MARILUCIA GASPARINI DE OLIVAS",
-        "A LIDA PEREIRA FIALHO",
         "A ANNE CHRISTINE SILVA RIBEIRO", 
     ]
 

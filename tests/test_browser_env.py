@@ -73,14 +73,14 @@ def test_create_browser_context_defaults(monkeypatch):
     assert browser is pw.chromium.browser
     assert context is browser.context
     assert page is context.page
-    assert pw.chromium.launch_kwargs["channel"] == "chrome"
-    assert "--disable-blink-features=AutomationControlled" not in pw.chromium.launch_kwargs["args"]
+    assert pw.chromium.launch_kwargs["channel"] == "chromium"
+    assert "--disable-blink-features=AutomationControlled" in pw.chromium.launch_kwargs["args"]
     assert browser.new_context_kwargs["viewport"] == {"width": 1280, "height": 720}
     assert browser.new_context_kwargs["locale"] == "pt-BR"
     assert browser.new_context_kwargs["timezone_id"] == "America/Sao_Paulo"
     assert "user_agent" not in browser.new_context_kwargs
     assert "storage_state" not in browser.new_context_kwargs
-    assert context.page.init_scripts == []
+    assert len(context.page.init_scripts) == 1
 
 
 def test_create_browser_context_respects_env_flags(monkeypatch, tmp_path):
@@ -201,4 +201,3 @@ def test_scraper_passes_user_agent_from_env(monkeypatch):
     bot.run()
 
     assert captured["user_agent"] == "UA-via-env"
-

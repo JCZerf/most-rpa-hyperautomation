@@ -269,6 +269,14 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 - Na API, prefira o campo `refinar_busca`; `refine` é mantido apenas por compatibilidade.
 - Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
+- Browser/Playwright via `.env`:
+  - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
+  - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
+  - `PLAYWRIGHT_USE_STEALTH_FLAGS`: habilita `--disable-blink-features=AutomationControlled`.
+  - `PLAYWRIGHT_HIDE_WEBDRIVER`: aplica override de `navigator.webdriver`.
+  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`Stealth().apply_stealth_sync(page)`).
+  - `PLAYWRIGHT_USER_AGENT`: user-agent customizado; se vazio, usa o default do projeto.
+  - `PLAYWRIGHT_SLOW_MO_MS`: delay entre ações (ms), útil para depuração e estabilidade.
 
 ## Testes
 ```bash
@@ -318,8 +326,10 @@ E2E_REQUIRE_SUCCESS=true \
 
 ## Boas práticas e troubleshooting
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
+- Se usar `PLAYWRIGHT_CHANNEL=chrome`, instale o Chrome no ambiente ou rode `playwright install chrome`.
+- Se usar `PLAYWRIGHT_USE_STEALTH_PACKAGE=true`, instale a dependência: `pip install playwright-stealth`.
 - Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
-- O Portal da Transparência pode acionar AWS WAF (challenge/telemetry). Nesse caso, a API retorna `status="blocked"` em vez de confundir com `0 resultados`.
+- O Portal da Transparência pode acionar challenge/telemetria. Atualmente o projeto não classifica automaticamente como `status="blocked"` para evitar falso positivo.
 - Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
 
 ## Segurança

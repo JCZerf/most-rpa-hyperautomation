@@ -105,6 +105,8 @@ def test_bot_sem_beneficio(monkeypatch, dummy_browser_ctx):
         return {
             "beneficios_encontrados": [],
             "panorama_base64": "pan",
+            "total_valor_recebido": 0.0,
+            "total_valor_recebido_formatado": "R$ 0,00",
             "data_consulta": "01/01/2026",
             "hora_consulta": "12:00",
         }
@@ -121,6 +123,9 @@ def test_bot_sem_beneficio(monkeypatch, dummy_browser_ctx):
     assert "evidencia_sem_beneficio" in result["meta"]
     assert result["meta"]["beneficios_encontrados"] == []
     assert result["meta"]["resultados_encontrados"] == 1
+    assert result["meta"]["total_valor_recebido"] == 0.0
+    assert result["meta"]["total_valor_recebido_formatado"] == "R$ 0,00"
+    assert result["pessoa"]["total_recursos_favorecidos"] == "R$ 0,00"
 
 
 def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
@@ -136,6 +141,8 @@ def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
             "beneficios_resultado": [{"tipo": "Auxílio Brasil", "nis": "123", "valor_recebido": "100"}],
             "quantidade_beneficios": 1,
             "panorama_base64": "pan",
+            "total_valor_recebido": 100.0,
+            "total_valor_recebido_formatado": "R$ 100,00",
             "data_consulta": "01/01/2026",
             "hora_consulta": "12:00",
         }
@@ -150,6 +157,9 @@ def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
     assert result["beneficios"][0]["tipo"] == "Auxílio Brasil"
     assert result["meta"]["beneficios_encontrados"] == ["Auxílio Brasil"]
     assert result["meta"]["resultados_encontrados"] == 2
+    assert result["meta"]["total_valor_recebido"] == 100.0
+    assert result["meta"]["total_valor_recebido_formatado"] == "R$ 100,00"
+    assert result["pessoa"]["total_recursos_favorecidos"] == "R$ 100,00"
     assert result["id_consulta"]
     assert result["data_hora_consulta"]
     assert result["meta"]["id_consulta"] == result["id_consulta"]

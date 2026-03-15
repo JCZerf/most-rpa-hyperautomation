@@ -15,6 +15,11 @@ from .validators import classificar_consulta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+
 
 class TransparencyBot:
     def __init__(self, headless: bool = True, alvo: Optional[str] = None, usar_refine: bool = False):
@@ -38,6 +43,7 @@ class TransparencyBot:
             "nome": src.get("nome") or "N/A",
             "cpf": src.get("cpf") or "N/A",
             "localidade": src.get("localidade") or "N/A",
+            "total_recursos_favorecidos": src.get("total_recursos_favorecidos") or "R$ 0,00",
         }
 
     def _com_auditoria(self, payload: Dict[str, Any], id_consulta: str, data_hora_consulta: str) -> Dict[str, Any]:
@@ -48,6 +54,8 @@ class TransparencyBot:
         meta = dict(out.get("meta") or {})
         meta["id_consulta"] = id_consulta
         meta["data_hora_consulta"] = data_hora_consulta
+        meta["total_valor_recebido"] = meta.get("total_valor_recebido", 0.0)
+        meta["total_valor_recebido_formatado"] = meta.get("total_valor_recebido_formatado", "R$ 0,00")
         out["meta"] = meta
         return out
 
@@ -78,7 +86,7 @@ class TransparencyBot:
             browser, context, page = create_browser_context(
                 pw,
                 headless=self.headless,
-                user_agent=os.getenv("PLAYWRIGHT_USER_AGENT", "").strip(),
+                user_agent=os.getenv("PLAYWRIGHT_USER_AGENT", DEFAULT_USER_AGENT).strip() or DEFAULT_USER_AGENT,
                 viewport={"width": 1280, "height": 720},
                 locale="pt-BR",
                 timezone_id="America/Sao_Paulo",
@@ -121,22 +129,35 @@ class TransparencyBot:
                 # Se nenhum benefício encontrado, montar retorno similar ao original
                 if not benefits_data.get("beneficios_encontrados"):
                     return self._com_auditoria({
-                        "pessoa": {**self._normalizar_pessoa(pessoal), "nis": None, "quantidade_beneficios": 0},
+                        "pessoa": {
+                            **self._normalizar_pessoa(pessoal),
+                            "nis": None,
+                            "quantidade_beneficios": 0,
+                            "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+                        },
                         "beneficios": [],
                         "meta": {
                             "resultados_encontrados": search_result.get("quantidade"),
                             "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
                             "evidencia_sem_beneficio": benefits_data.get("panorama_base64"),
+                            "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
+                            "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
                         },
                     }, id_consulta, data_hora_consulta)
 
                 resultado_final = {
-                    "pessoa": {**self._normalizar_pessoa(pessoal), "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0)},
+                    "pessoa": {
+                        **self._normalizar_pessoa(pessoal),
+                        "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0),
+                        "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+                    },
                     "beneficios": benefits_data.get("beneficios_resultado"),
                     "meta": {
                         "resultados_encontrados": search_result.get("quantidade"),
                         "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
                         "panorama_relacao": benefits_data.get("panorama_base64"),
+                        "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
+                        "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
                     },
                 }
 
