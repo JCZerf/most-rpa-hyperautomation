@@ -1,27 +1,42 @@
 import os
+from pathlib import Path
 from typing import Any, Tuple
 from playwright.sync_api import Playwright
 
 
 def create_browser_context(pw: Playwright, headless: bool, user_agent: str, viewport: dict, locale: str, timezone_id: str) -> Tuple[Any, Any, Any]:
     slow_mo = int(os.getenv("PLAYWRIGHT_SLOW_MO_MS", "0"))
+    channel = os.getenv("PLAYWRIGHT_CHANNEL", "chrome").strip() or "chrome"
+    use_stealth_flags = os.getenv("PLAYWRIGHT_USE_STEALTH_FLAGS", "false").strip().lower() in {"1", "true", "yes"}
+    hide_webdriver = os.getenv("PLAYWRIGHT_HIDE_WEBDRIVER", "false").strip().lower() in {"1", "true", "yes"}
+    storage_state_path = os.getenv("PLAYWRIGHT_STORAGE_STATE_PATH", "").strip()
+
+    launch_args = [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+    ]
+    if use_stealth_flags:
+        launch_args.append("--disable-blink-features=AutomationControlled")
 
     browser = pw.chromium.launch(
         headless=headless,
         slow_mo=slow_mo,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-        ],
+        channel=channel,
+        args=launch_args,
     )
 
-    context = browser.new_context(
-        user_agent=user_agent,
-        viewport=viewport,
-        locale=locale,
-        timezone_id=timezone_id,
-    )
+    context_kwargs = {
+        "viewport": viewport,
+        "locale": locale,
+        "timezone_id": timezone_id,
+    }
+    if user_agent:
+        context_kwargs["user_agent"] = user_agent
+    if storage_state_path and Path(storage_state_path).is_file():
+        context_kwargs["storage_state"] = storage_state_path
+
+    context = browser.new_context(**context_kwargs)
     page = context.new_page()
-    page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    if hide_webdriver:
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     return browser, context, page

@@ -89,7 +89,7 @@ Payloads aceitos:
 - **Lote avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": false}]}` (máx. 3 itens; `refinar_busca` padrão = false)
 - **Compatibilidade**: o campo legado `refine` continua aceito.
 
-Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
+Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
 ## Documentação do desafio
 - Contexto: [doc/01-documentação-de-contexto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/01-documentação-de-contexto.md)
@@ -109,7 +109,10 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
 #### 1) Consulta única com sucesso (`200 OK`)
 ```json
 {
+  "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+  "data_hora_consulta": "14/03/2026 10:30",
   "pessoa": {
+    "consulta": "04031769644",
     "nome": "NOME DA PESSOA",
     "cpf": "***.***.***-**",
     "localidade": "UF",
@@ -135,13 +138,13 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
     }
   ],
   "meta": {
+    "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+    "data_hora_consulta": "14/03/2026 10:30",
     "resultados_encontrados": 1,
     "beneficios_encontrados": [
       "Auxílio Brasil"
     ],
-    "panorama_relacao": "<base64>",
-    "data_consulta": "14/03/2026",
-    "hora_consulta": "10:30"
+    "panorama_relacao": "<base64>"
   }
 }
 ```
@@ -149,6 +152,8 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
 #### 2) Consulta única sem resultado (`200 OK` com erro de negócio)
 ```json
 {
+  "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
+  "data_hora_consulta": "14/03/2026 10:31",
   "status": "error",
   "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
   "pessoa": {
@@ -159,11 +164,10 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
   },
   "beneficios": [],
   "meta": {
+    "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
+    "data_hora_consulta": "14/03/2026 10:31",
     "resultados_encontrados": 0,
     "evidencia_resultados_zero": "<base64>",
-    "data_consulta": "14/03/2026",
-    "hora_consulta": "10:31",
-    "data_hora_consulta": "14/03/2026 10:31",
     "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado"
   }
 }
@@ -205,9 +209,19 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
       "consulta": "04031769644",
       "status": "ok",
       "resultado": {
-        "pessoa": {},
+        "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+        "data_hora_consulta": "14/03/2026 10:30",
+        "pessoa": {
+          "consulta": "04031769644",
+          "nome": "NOME DA PESSOA",
+          "cpf": "***.***.***-**",
+          "localidade": "UF"
+        },
         "beneficios": [],
-        "meta": {}
+        "meta": {
+          "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+          "data_hora_consulta": "14/03/2026 10:30"
+        }
       }
     },
     {
@@ -215,7 +229,19 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
       "status": "invalid",
       "resultado": {
         "status": "invalid",
-        "error": "..."
+        "error": "...",
+        "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
+        "data_hora_consulta": "14/03/2026 10:32",
+        "pessoa": {
+          "consulta": "NOME INEXISTENTE",
+          "nome": "N/A",
+          "cpf": "N/A",
+          "localidade": "N/A"
+        },
+        "meta": {
+          "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
+          "data_hora_consulta": "14/03/2026 10:32"
+        }
       }
     }
   ]
@@ -284,10 +310,11 @@ E2E_REQUIRE_SUCCESS=true \
 - Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
 
 ## Estrutura de saída (resumo)
-- `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
+- `id_consulta`: UUID da execução (sempre presente).
+- `data_hora_consulta`: timestamp único da consulta (`dd/mm/aaaa HH:MM`, sempre presente).
+- `pessoa`: `consulta`, `nome`, `cpf`, `localidade`, `quantidade_beneficios`… (campos básicos com `N/A` quando ausentes).
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
-- `meta`: `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64), `data_consulta`, `hora_consulta`, `data_hora_consulta`.
-- Em bloqueio do portal: `status="blocked"` com `meta.bloqueio_detectado`, `meta.next_interval_ms` e `meta.detected_by`.
+- `meta`: inclui também `id_consulta` e `data_hora_consulta` para auditoria, além de `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64) e evidências.
 
 ## Boas práticas e troubleshooting
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
