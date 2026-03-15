@@ -220,3 +220,17 @@ def test_bot_detalhe_parcelas(monkeypatch, dummy_browser_ctx):
 
     assert result["beneficios"][0]["parcelas"][0]["valor"] == "200"
     assert result["beneficios"][0]["detalhe_evidencia"] == "imgb64"
+
+
+def test_bot_reporta_etapa_falha_no_meta(monkeypatch, dummy_browser_ctx):
+    def fake_search(page, url_base, alvo, usar_refine):
+        raise RuntimeError("[ETAPA:clicar_lupa_busca] Timeout ao clicar na lupa")
+
+    monkeypatch.setattr("bot.scraper.perform_search", fake_search)
+
+    bot = TransparencyBot(headless=True, alvo="FULANO TESTE")
+    result = bot.run()
+
+    assert result["status"] == "error"
+    assert "clicar_lupa_busca" in result["error"]
+    assert result["meta"]["etapa_falha"] == "clicar_lupa_busca"

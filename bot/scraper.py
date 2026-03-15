@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import datetime
+import re
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
@@ -179,8 +180,17 @@ class TransparencyBot:
                 except Exception as e:
                     log_event(logger, logging.ERROR, "erro_execucao_bot", erro=str(e))
                     logger.error(f"Erro durante a execução do bot: {e}", exc_info=True)
+                    etapa_falha = None
+                    match_etapa = re.search(r"\[ETAPA:([^\]]+)\]", str(e))
+                    if match_etapa:
+                        etapa_falha = match_etapa.group(1)
+
+                    meta_erro = {}
+                    if etapa_falha:
+                        meta_erro["etapa_falha"] = etapa_falha
+
                     return self._com_auditoria(
-                        {"status": "error", "error": str(e)},
+                        {"status": "error", "error": str(e), "meta": meta_erro},
                         id_consulta,
                         data_hora_consulta,
                     )

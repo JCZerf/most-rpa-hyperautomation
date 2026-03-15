@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 STOPWORDS_NOME = {"A", "O", "AS", "OS", "DE", "DA", "DO", "DAS", "DOS", "E"}
 
 
+def _executar_etapa(nome_etapa: str, acao):
+    try:
+        return acao()
+    except Exception as exc:
+        raise RuntimeError(f"[ETAPA:{nome_etapa}] {exc}") from exc
+
+
 def _normalizar_nome(texto: str) -> str:
     base = unicodedata.normalize("NFD", texto or "")
     base = "".join(ch for ch in base if unicodedata.category(ch) != "Mn")
@@ -61,55 +68,71 @@ def _escolher_indice_nome_mais_proximo(alvo: str, nomes_encontrados: List[str]) 
 
 def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Dict[str, Any]:
     log_event(logger, logging.INFO, "inicio_busca", alvo=alvo, url_base=url_base, usar_refine=usar_refine)
-    page.goto(url_base, wait_until="networkidle")
+    _executar_etapa("abrir_portal", lambda: page.goto(url_base, wait_until="networkidle"))
 
     try:
         page.get_by_role("button", name="acceptButtonLabel").click()
     except Exception:
         pass
 
-    page.locator("div:nth-child(10) > .flipcard > .flipcard-wrap > .card.card-back > .card-body").click(force=True)
-    page.locator("#button-consulta-pessoa-fisica").click()
+    _executar_etapa(
+        "abrir_cartao_consulta",
+        lambda: page.locator("div:nth-child(10) > .flipcard > .flipcard-wrap > .card.card-back > .card-body").click(
+            force=True
+        ),
+    )
+    _executar_etapa("abrir_consulta_pf", lambda: page.locator("#button-consulta-pessoa-fisica").click())
 
     input_busca = page.get_by_role("searchbox", name="Busque por Nome, Nis ou CPF (")
-    input_busca.click()
-    input_busca.fill(alvo)
+    _executar_etapa("focar_campo_busca", lambda: input_busca.click())
+    _executar_etapa("preencher_busca", lambda: input_busca.fill(alvo))
 
     if usar_refine:
         log_event(logger, logging.INFO, "fluxo_refinado")
         refine_button = page.get_by_role("button", name="Refine a Busca")
-        try:
-            refine_button.click(timeout=5000)
-        except Exception:
-            refine_button.click(force=True, timeout=5000)
+        def abrir_refine_busca():
+            try:
+                refine_button.click(timeout=5000)
+            except Exception:
+                refine_button.click(force=True, timeout=5000)
+
+        _executar_etapa("abrir_refine_busca", abrir_refine_busca)
 
         # O label pode aparecer com variação de texto ou estar fora da área visível.
         # Marcamos direto o checkbox com fallback forçado/JS para evitar timeout intermitente.
-        filtro_beneficiario = page.locator("#beneficiarioProgramaSocial")
-        try:
-            filtro_beneficiario.check(timeout=5000)
-        except Exception:
+        def marcar_filtro_beneficiario():
+            filtro_beneficiario = page.locator("#beneficiarioProgramaSocial")
             try:
-                filtro_beneficiario.check(force=True, timeout=5000)
+                filtro_beneficiario.check(timeout=5000)
             except Exception:
-                page.eval_on_selector(
-                    "#beneficiarioProgramaSocial",
-                    """(el) => {
-                        el.checked = true;
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    }""",
-                )
+                try:
+                    filtro_beneficiario.check(force=True, timeout=5000)
+                except Exception:
+                    page.eval_on_selector(
+                        "#beneficiarioProgramaSocial",
+                        """(el) => {
+                            el.checked = true;
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                        }""",
+                    )
 
-        page.locator("#btnConsultarPF").click()
+        _executar_etapa("marcar_filtro_beneficiario", marcar_filtro_beneficiario)
+        _executar_etapa("executar_consulta_refinada", lambda: page.locator("#btnConsultarPF").click())
     else:
         log_event(logger, logging.INFO, "fluxo_simples")
-        page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click()
+        _executar_etapa(
+            "clicar_lupa_busca",
+            lambda: page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click(),
+        )
 
-    page.wait_for_load_state("networkidle")
+    _executar_etapa("aguardar_carregamento_resultados", lambda: page.wait_for_load_state("networkidle"))
     contador_locator = page.locator("#countResultados")
-    contador_locator.wait_for(state="visible", timeout=15000)
+    _executar_etapa("aguardar_contador_resultados", lambda: contador_locator.wait_for(state="visible", timeout=15000))
 
-    page.wait_for_function("document.querySelector('#countResultados').innerText.trim() !== ''")
+    _executar_etapa(
+        "aguardar_contador_preenchido",
+        lambda: page.wait_for_function("document.querySelector('#countResultados').innerText.trim() !== ''"),
+    )
     quantidade_texto = contador_locator.inner_text().strip()
     quantidade = int(quantidade_texto.replace('.', '')) if quantidade_texto else 0
     log_event(logger, logging.INFO, "resultados_encontrados", quantidade=quantidade)
@@ -165,5 +188,8 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
         }
 
     # Seleciona o resultado escolhido quando houver.
-    page.locator(".link-busca-nome").nth(indice_escolhido).click()
+    _executar_etapa(
+        "abrir_resultado_escolhido",
+        lambda: page.locator(".link-busca-nome").nth(indice_escolhido).click(),
+    )
     return {"zero": False, "quantidade": quantidade}
