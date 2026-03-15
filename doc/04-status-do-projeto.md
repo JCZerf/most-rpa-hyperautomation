@@ -18,15 +18,11 @@
 - **Fase 1 — Base técnica (concluída):** bot Playwright, API Django, autenticação, deploy Cloud Run, documentação Swagger.
 - **Fase 2 — Robustez e contrato (concluída):** padronização de erros/respostas, cobertura de testes unitários/API, documentação de payload e formato de retorno.
 - **Fase 3 — Validação real (concluída):** execução E2E smoke pós-deploy e rodada manual concorrente, com artefatos versionados.
-- **Fase 4 — Bônus hiperautomação (em andamento):** ferramenta escolhida (**Make**); implementação do workflow para acionar API, salvar JSON no Google Drive e registrar metadados/link no Google Sheets.
-- **Fase 5 — Fechamento de entrega (próxima):** evidências finais para apresentação, right-sizing final e checklist de segurança/segredos.
+- **Fase 4 — Bônus hiperautomação (concluída):** workflow no **Make** implementado para acionar API, salvar JSON no Google Drive e registrar metadados/link no Google Sheets.
+- **Fase 5 — Fechamento de entrega (em andamento):** consolidação de evidências finais para apresentação, right-sizing final e checklist de segurança/segredos.
 
 ## Backlog imediato (próximas implementações)
-- Implementar Parte 2 (bônus):
-  - Chamar `/api/token/` e `/api/consulta/` no Make.
-  - Salvar JSON no Google Drive no padrão `[IDENTIFICADOR_UNICO]_[DATA_HORA].json`.
-  - Atualizar linha no Google Sheets com identificador, nome, CPF (mascarado), data/hora e link do arquivo.
-- Registrar evidência final do cenário de ponta a ponta da Parte 2 (run do Make + arquivo no Drive + linha no Sheets).
+- Consolidar evidência versionada do cenário ponta a ponta da Parte 2 (run do Make + arquivo no Drive + linha no Sheets + frontend de disparo via webhook).
 - Consolidar política de retenção/expurgo para evidências em Base64 no fluxo externo (Make/Google).
 
 ## Evidências registradas
@@ -40,7 +36,7 @@
 - Evidências da documentação interativa e autenticação: [api-docs](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h)
 
 ## Ações em aberto
-- Finalizar a implementação do bônus da Parte 2 no Make e versionar evidências da execução ponta a ponta.
+- Versionar evidências finais da execução ponta a ponta da Parte 2 (Make/Drive/Sheets/frontend).
 - Ajustar right-sizing de infraestrutura após coleta de métricas (memória, latência e taxa de erro), mantendo estabilidade como prioridade.
 - Definir política de retenção/expurgo para evidências em Base64 no consumo downstream (governança LGPD).
 - Opcional de evolução: ampliar navegação para abas/tabelas adicionais de detalhe, se o escopo pós-desafio exigir maior cobertura funcional.

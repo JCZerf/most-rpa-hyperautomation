@@ -5,6 +5,7 @@ Automação RPA/hiperautomação em Python que consulta o Portal da Transparênc
 Principais modos de uso:
 - **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
 - **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
+- **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
@@ -96,6 +97,13 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
 - Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 
+## Aderência ao enunciado MOST
+- Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.
+- API online: **implementada** com Swagger/OpenAPI.
+- Execução simultânea: **implementada** (runner local e batch da API).
+- Parte 2 (bônus): **implementada** com **Make**, incluindo integração com Google Drive/Sheets.
+- Frontend de operação: **implementado** para acionar webhook do Make e iniciar a automação ponta a ponta.
+
 ### Formato das respostas da API
 
 #### 1) Consulta única com sucesso (`200 OK`)
@@ -144,7 +152,10 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
   "status": "error",
   "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
   "pessoa": {
-    "consulta": "04031769644"
+    "consulta": "04031769644",
+    "nome": "N/A",
+    "cpf": "N/A",
+    "localidade": "N/A"
   },
   "beneficios": [],
   "meta": {
@@ -152,12 +163,41 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
     "evidencia_resultados_zero": "<base64>",
     "data_consulta": "14/03/2026",
     "hora_consulta": "10:31",
+    "data_hora_consulta": "14/03/2026 10:31",
     "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado"
   }
 }
 ```
 
-#### 3) Lote (`200 OK`)
+#### 3) Consulta bloqueada por proteção do portal (`200 OK` com bloqueio operacional)
+```json
+{
+  "status": "blocked",
+  "error": "Bloqueio temporário detectado pelo WAF do portal",
+  "pessoa": {
+    "consulta": "NOME COMPLETO",
+    "nome": "N/A",
+    "cpf": "N/A",
+    "localidade": "N/A"
+  },
+  "beneficios": [],
+  "meta": {
+    "resultados_encontrados": 0,
+    "evidencia_resultados_zero": "<base64>",
+    "data_consulta": "15/03/2026",
+    "hora_consulta": "00:44",
+    "data_hora_consulta": "15/03/2026 00:44",
+    "mensagem": "Bloqueio temporário detectado pelo WAF do portal",
+    "bloqueio_detectado": true,
+    "next_interval_ms": 10000,
+    "detected_by": [
+      "telemetry_next_interval"
+    ]
+  }
+}
+```
+
+#### 4) Lote (`200 OK`)
 ```json
 {
   "resultados": [
@@ -182,7 +222,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta). Em caso de erro, ret
 }
 ```
 
-#### 4) Erros de protocolo/segurança
+#### 5) Erros de protocolo/segurança
 
 | HTTP | Quando acontece | Exemplo |
 |------|------------------|---------|
@@ -246,11 +286,13 @@ E2E_REQUIRE_SUCCESS=true \
 ## Estrutura de saída (resumo)
 - `pessoa`: `nome`, `cpf`, `localidade`, `quantidade_beneficios`…
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
-- `meta`: `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64), `data_consulta`, `hora_consulta`.
+- `meta`: `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64), `data_consulta`, `hora_consulta`, `data_hora_consulta`.
+- Em bloqueio do portal: `status="blocked"` com `meta.bloqueio_detectado`, `meta.next_interval_ms` e `meta.detected_by`.
 
 ## Boas práticas e troubleshooting
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
 - Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
+- O Portal da Transparência pode acionar AWS WAF (challenge/telemetry). Nesse caso, a API retorna `status="blocked"` em vez de confundir com `0 resultados`.
 - Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
 
 ## Segurança

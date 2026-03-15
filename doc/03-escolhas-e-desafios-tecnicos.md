@@ -47,7 +47,7 @@
 
 - **Estratégia para buscas por nome**  
   - Opções: processar qualquer nome retornando grandes listas vs restringir casos ambíguos.  
-  - Escolha: **desconsiderar nomes com resultado excessivo/ambíguo** (ex.: centenas de ocorrências) para reduzir consumo de recurso e evitar extrações incorretas por homônimos.
+  - Escolha: **balancear precisão e aderência ao desafio** com normalização de nomes (acentos/artigos) e regra operacional de selecionar o primeiro resultado quando houver retorno amplo, mantendo rastreabilidade por evidência.
 
 - **Escopo de extração dos benefícios**  
   - Opções: navegar todas as abas/telas de detalhe vs focar no recorte exigido no desafio.  
