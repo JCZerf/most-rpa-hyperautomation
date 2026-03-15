@@ -5,9 +5,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'replace-me-in-production'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', SECRET_KEY)
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
-API_MASTER_KEY = os.getenv('API_MASTER_KEY')  # legado, manter para compatibilidade se necessário
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+API_MASTER_KEY = os.getenv('API_MASTER_KEY')
 API_TOKEN_TTL = int(os.getenv('API_TOKEN_TTL', '600'))
 OAUTH_CLIENT_ID = os.getenv('OAUTH_CLIENT_ID')
 OAUTH_CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
@@ -103,9 +103,8 @@ DATABASES = {
 }
 
 LANGUAGE_CODE = 'pt-br'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = False
-USE_L10N = False
 USE_TZ = True
 
 STATIC_URL = '/static/'
