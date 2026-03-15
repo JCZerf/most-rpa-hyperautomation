@@ -7,6 +7,7 @@ from bot.validators import classificar_consulta
     "valor, esperado_tipo",
     [
         ("52998224725", "cpf"),   # CPF válido
+        ("529.982.247-25", "cpf"),  # CPF válido formatado
         ("00000000000", None),    # inválido
     ],
 )
@@ -39,3 +40,10 @@ def test_classificar_nis_valido():
     nis = "12345678909"
     ok, tipo, _, _ = classificar_consulta(nis)
     assert isinstance(ok, bool)
+
+
+def test_classificar_cpf_formatado_retorna_normalizado():
+    ok, tipo, normalizado, _ = classificar_consulta("529.982.247-25")
+    assert ok is True
+    assert tipo == "cpf"
+    assert normalizado == "52998224725"
