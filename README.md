@@ -302,9 +302,11 @@ pytest -q -m "not e2e"
 Cobertura principal desse bloco:
 - `tests/test_validators.py`: validação de CPF/NIS/nome.
 - `tests/test_navigation.py`: score de nome e escolha do resultado mais próximo.
+- `tests/test_extraction_parsers.py`: parsing de layouts de tabela de detalhe (recebidos/disponibilizado/sacados/fallback).
 - `tests/test_bot.py`: contrato de saída do bot (`N/A`, `id_consulta`, `data_hora_consulta`, erros e evidências).
 - `tests/test_browser_env.py`: leitura de envs do Playwright/browser.
 - `tests/test_main.py`: runner local (`main.py`), duração e comportamento de execução.
+- `tests/test_utils.py`: conversão/formatacão monetária (`valor_texto_para_float`, `formatar_brl`).
 - `tests/test_api_token.py`: geração e validação básica de token.
 - `tests/test_api_consulta.py`: endpoint `/api/consulta` (single/lote), autenticação, limites e erros.
 
@@ -365,7 +367,7 @@ E2E_REQUIRE_SUCCESS=true \
 - Se usar `PLAYWRIGHT_USE_STEALTH_PACKAGE=true`, instale a dependência: `pip install playwright-stealth`.
 - Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
 - O Portal da Transparência pode acionar challenge/telemetria. Atualmente o projeto não classifica automaticamente como `status="blocked"` para evitar falso positivo.
-- Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
+- Logs do runner local em `logs/execucao_<timestamp>.log` e logs da API via Django/Cloud Logging.
 
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD.

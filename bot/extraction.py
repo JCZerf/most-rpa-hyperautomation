@@ -1,34 +1,12 @@
 import logging
 import datetime
 import base64
-import re
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 from .logging_utils import log_event
+from .utils import valor_texto_para_float, formatar_brl
 
 logger = logging.getLogger(__name__)
-
-
-def _valor_texto_para_float(texto: str) -> float:
-    if not texto:
-        return 0.0
-    # Ex.: "R$ 1.234,56" -> 1234.56
-    limpo = re.sub(r"[^\d,.-]", "", texto)
-    if not limpo:
-        return 0.0
-    if "," in limpo:
-        limpo = limpo.replace(".", "").replace(",", ".")
-    try:
-        return float(limpo)
-    except Exception:
-        return 0.0
-
-
-def _formatar_brl(valor: float) -> str:
-    bruto = f"{valor:,.2f}"
-    # "1,234.56" -> "1.234,56"
-    br = bruto.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {br}"
 
 
 def extract_personal_info(page: Any) -> Dict[str, str]:
@@ -38,37 +16,142 @@ def extract_personal_info(page: Any) -> Dict[str, str]:
     return {"nome": nome, "cpf": cpf, "localidade": localidade}
 
 
+def _agora_brt() -> Dict[str, str]:
+    agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
+    return {"data_consulta": agora.strftime("%d/%m/%Y"), "hora_consulta": agora.strftime("%H:%M")}
+
+
+def _detectar_beneficios_painel(page: Any) -> List[str]:
+    beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
+    encontrados: List[str] = []
+    for beneficio in beneficios_possiveis:
+        if page.locator(f"strong:has-text('{beneficio}')").count() > 0:
+            encontrados.append(beneficio)
+    return encontrados
+
+
+def _extrair_textos_cols(cols: Any) -> List[str]:
+    return [cols.nth(ci).inner_text().strip() for ci in range(cols.count())]
+
+
+def _parse_linha_valores_recebidos(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 6:
+        return None
+    return {
+        "mes_folha": valores[0],
+        "mes_referencia": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "quantidade_dependentes": valores[4],
+        "valor": valores[5],
+    }
+
+
+def _parse_linha_disponibilizado(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 7:
+        return None
+    return {
+        "mes_disponibilizacao": valores[0],
+        "parcela": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "enquadramento": valores[4],
+        "valor": valores[5],
+        "observacao": valores[6],
+    }
+
+
+def _parse_linha_valores_sacados(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 5:
+        return None
+    return {
+        "mes_folha": valores[0],
+        "mes_referencia": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "valor_parcela": valores[4],
+    }
+
+
+def _parse_linha_generica(valores: List[str]) -> Dict[str, str] | None:
+    if not valores:
+        return None
+    return {f"col_{idx}": val for idx, val in enumerate(valores)}
+
+
+def _coletar_linhas_tabela(tabela: Any, nova_pagina: Any, parser) -> List[Dict[str, str]]:
+    detalhes: List[Dict[str, str]] = []
+    tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
+    nova_pagina.wait_for_timeout(300)
+    linhas = tabela.locator("tbody tr")
+    for r in range(linhas.count()):
+        cols = linhas.nth(r).locator("td")
+        valores = _extrair_textos_cols(cols)
+        parsed = parser(valores)
+        if parsed:
+            detalhes.append(parsed)
+    return detalhes
+
+
+def _encontrar_tabela_fallback(nova_pagina: Any) -> Any | None:
+    if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+        return nova_pagina.locator("table#tabelaDetalheDisponibilizado")
+
+    tables = nova_pagina.locator("table")
+    for ti in range(tables.count()):
+        tabela = tables.nth(ti)
+        if tabela.locator("tbody tr").count() > 0:
+            return tabela
+    return None
+
+
+def _coletar_detalhe_parcelas(nova_pagina: Any) -> List[Dict[str, str]]:
+    try:
+        if nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheValoresRecebidos")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_recebidos)
+
+        if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_disponibilizado)
+
+        if nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheValoresSacados")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_sacados)
+
+        tabela = _encontrar_tabela_fallback(nova_pagina)
+        if tabela:
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_generica)
+    except Exception:
+        return []
+    return []
+
+
 def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     # Captura panorama
     panorama_bytes = page.screenshot(full_page=True)
     panorama_base64 = base64.b64encode(panorama_bytes).decode("utf-8")
     log_event(logger, logging.INFO, "panorama_capturado")
 
-    beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
-    beneficios_encontrados: List[str] = []
-    for b in beneficios_possiveis:
-        if page.locator(f"strong:has-text('{b}')").count() > 0:
-            beneficios_encontrados.append(b)
+    beneficios_encontrados = _detectar_beneficios_painel(page)
 
     # log resumo inicial de benefícios detectados
     log_event(logger, logging.INFO, "beneficios_detectados_painel", beneficios=beneficios_encontrados)
 
     if not beneficios_encontrados:
-        agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
-        data_consulta = agora.strftime("%d/%m/%Y")
-        hora_consulta = agora.strftime("%H:%M")
+        ts = _agora_brt()
         return {
             "beneficios_encontrados": beneficios_encontrados,
             "panorama_base64": panorama_base64,
             "total_valor_recebido": 0.0,
-            "total_valor_recebido_formatado": _formatar_brl(0.0),
+            "total_valor_recebido_formatado": formatar_brl(0.0),
             "resultado": {
                 "beneficios": [],
                 "meta": {
                     "beneficios_encontrados": beneficios_encontrados,
                     "evidencia_sem_beneficio": panorama_base64,
-                    "data_consulta": data_consulta,
-                    "hora_consulta": hora_consulta,
+                    "data_consulta": ts["data_consulta"],
+                    "hora_consulta": ts["hora_consulta"],
                 },
             },
         }
@@ -114,76 +197,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-                try:
-                    if nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheValoresRecebidos")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 6:
-                                detalhe_parcelas.append({
-                                    "mes_folha": cols.nth(0).inner_text().strip(),
-                                    "mes_referencia": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "quantidade_dependentes": cols.nth(4).inner_text().strip(),
-                                    "valor": cols.nth(5).inner_text().strip(),
-                                })
-                    elif nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 7:
-                                detalhe_parcelas.append({
-                                    "mes_disponibilizacao": cols.nth(0).inner_text().strip(),
-                                    "parcela": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "enquadramento": cols.nth(4).inner_text().strip(),
-                                    "valor": cols.nth(5).inner_text().strip(),
-                                    "observacao": cols.nth(6).inner_text().strip(),
-                                })
-                    elif nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheValoresSacados")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 5:
-                                detalhe_parcelas.append({
-                                    "mes_folha": cols.nth(0).inner_text().strip(),
-                                    "mes_referencia": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "valor_parcela": cols.nth(4).inner_text().strip(),
-                                })
-                    else:
-                        tabela = None
-                        if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
-                            tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
-                        else:
-                            tables = nova_pagina.locator("table")
-                            for ti in range(tables.count()):
-                                if tables.nth(ti).locator("tbody tr").count() > 0:
-                                    tabela = tables.nth(ti)
-                                    break
-                        if tabela:
-                            tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                            nova_pagina.wait_for_timeout(300)
-                            linhas = tabela.locator("tbody tr")
-                            for r in range(linhas.count()):
-                                cols = linhas.nth(r).locator("td")
-                                if cols.count() >= 1:
-                                    row = [cols.nth(ci).inner_text().strip() for ci in range(cols.count())]
-                                    detalhe_parcelas.append({f"col_{idx}": val for idx, val in enumerate(row)})
-                except Exception:
-                    detalhe_parcelas = []
+                detalhe_parcelas = _coletar_detalhe_parcelas(nova_pagina)
 
                 try:
                     bytes_det = nova_pagina.screenshot(full_page=True)
@@ -209,20 +223,18 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
             "parcelas": detalhe_parcelas,
         })
 
-    agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
-    data_consulta = agora.strftime("%d/%m/%Y")
-    hora_consulta = agora.strftime("%H:%M")
+    ts = _agora_brt()
 
     quantidade_beneficios = len(beneficios_resultado)
-    total_valor_recebido = sum(_valor_texto_para_float(b.get("valor_recebido", "")) for b in beneficios_resultado)
+    total_valor_recebido = sum(valor_texto_para_float(b.get("valor_recebido", "")) for b in beneficios_resultado)
 
     return {
         "beneficios_resultado": beneficios_resultado,
         "beneficios_encontrados": beneficios_encontrados,
         "quantidade_beneficios": quantidade_beneficios,
         "total_valor_recebido": total_valor_recebido,
-        "total_valor_recebido_formatado": _formatar_brl(total_valor_recebido),
+        "total_valor_recebido_formatado": formatar_brl(total_valor_recebido),
         "panorama_base64": panorama_base64,
-        "data_consulta": data_consulta,
-        "hora_consulta": hora_consulta,
+        "data_consulta": ts["data_consulta"],
+        "hora_consulta": ts["hora_consulta"],
     }
