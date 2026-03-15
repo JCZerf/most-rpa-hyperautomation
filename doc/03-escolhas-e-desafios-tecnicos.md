@@ -1,69 +1,39 @@
-## Escolhas técnicas (com opções e justificativa)
+## Atalhos rápidos
+- Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
 
-- **Backend**  
-  - Opções: Django/DRF vs FastAPI.  
-  - Escolha: **Django/DRF** porque já havia código e testes prontos, integra fácil com middleware/logs existentes e reduz esforço de migração; custo de performance aceitável para workloads bound em Playwright, não em CPU web.
+## Escolhas confirmadas da implementação atual
+- **Backend e API:** Django/DRF com arquitetura modular (`navigation`, `extraction`, `browser`, `views`, `auth`) para separar responsabilidades e simplificar manutenção.
+- **Automação:** Playwright com Chromium em modo headless, mantendo estabilidade operacional para o portal alvo.
+- **Desambiguação por nome com score:** a seleção do resultado usa normalização de nome (acentos/pontuação/artigos), cálculo de score de proximidade e escolha do melhor candidato; fallback para o primeiro resultado quando não há índice válido.
+- **Escopo de benefícios e layouts:** mapeamento focado nos benefícios exigidos no desafio (Auxílio Brasil, Auxílio Emergencial e Bolsa Família). Para cenários fora do recorte, mantém extração de panorama/dados base sem aprofundar extração não essencial.
+- **Escopo de parcelas em detalhe:** a extração atual trabalha com a tabela detalhada visível/compatível na página de detalhe, sem navegação ampla por abas internas adicionais, como estratégia de desempenho e simplicidade para o escopo.
+- **Autenticação da API:** OAuth2 client_credentials com JWT HS256, chave dedicada (`API_MASTER_KEY`) e TTL padrão de 10 minutos (`API_TOKEN_TTL=600`).
+- **Parâmetro de refinamento:** padronização para `refinar_busca` como campo oficial e único da API.
+- **Infraestrutura em nuvem:** escolha por Google Cloud Run pela velocidade de entrega, facilidade operacional e créditos gratuitos no contexto do projeto.
+- **Recursos de execução:** perfis leves (ex.: 512MB/1CPU) não suportaram o navegador de forma estável; operação validada entre 2GB e 4GB de RAM com 2 vCPU nos testes.
+- **Hiperautomação (bônus):** fluxo funcional no Make, com gravação de JSON no Drive e registro estruturado no Sheets, priorizando entrega do fluxo ponta a ponta.
 
-- **Automation engine**  
-  - Opções: Playwright (Chromium headless) vs Selenium.  
-  - Escolha: **Playwright** pela API moderna, isolamento de contexto mais simples e download de navegador gerenciado, que diminui flakiness. Mantido Chromium headless para suportar o portal alvo.
+## Desafios encontrados e mitigação aplicada
+- **Card rotativo na home do portal:** dificultava o clique determinístico no fluxo inicial. Mitigação aplicada com clique forçado e sequência de navegação estabilizada.
+- **Sincronização de carregamento nas telas de detalhe:** sem espera adequada, a extração de parcelas podia quebrar. Mitigação com esperas explícitas de carregamento/estado antes de ler tabelas.
+- **Intermitência no modo refinado (`refinar_busca=true`):** o container de busca refinada podia permanecer oculto em alguns cenários. Mitigação com fallback de clique forçado e marcação do filtro via JavaScript.
+- **CAPTCHA/WAF e bloqueios progressivos:** houve ocorrência de bloqueio tanto na API em nuvem quanto em máquina local após volume de consultas.
+  - Hipótese técnica principal: combinação de telemetria comportamental, assinatura de automação e mecanismos anti-bot do portal.
+  - Evidência empírica da fase de testes: cerca de 500 solicitações ao longo de aproximadamente 8 horas antes de bloqueio geral.
+  - Situação atual: mitigado parcialmente com tuning de browser/contexto, porém o tratamento definitivo de bloqueio permanece como frente de evolução.
+- **Limitação de infraestrutura gratuita:** ambiente com 512MB/1CPU não sustentou execução estável do Playwright; decisão operacional foi usar perfil superior no Google Cloud.
+- **Integrações Make/Drive/Sheets:** implementação inicial foi direta e funcional, porém sem camada completa de regras de negócio por cenário (quando salvar, quando não salvar, validações por ramificação).
 
-- **Execução em nuvem**  
-  - Opções: Cloud Run vs Compute Engine/VM dedicada.  
-  - Escolha: **Cloud Run** pelo autoscaling gerenciado, faturamento por uso e fácil integração com Artifact Registry e WIF. VM implicaria gerenciar SO e patches, contrariando o prazo/escopo.
+## Evoluções possíveis (fora do escopo atual)
+- **Navegação por abas adicionais de parcelas:** expandir extração para percorrer abas internas de detalhe quando existirem, cobrindo mais layouts de forma automática.
+- **Expansão de layouts não prioritários:** adicionar parsing dedicado para benefícios/telas não exigidos no recorte original.
+- **Política avançada de persistência no Make:** regras condicionais de gravação em Drive/Sheets, tratamento por tipo de retorno e governança de expurgo/retensão.
+- **Camada anti-bloqueio/WAF mais robusta:** estratégias adicionais de redução de assinatura de automação, controle de ritmo e observabilidade específica de bloqueios.
+- **Right-sizing contínuo:** ajustar CPU/memória com base em métrica de latência, taxa de sucesso e taxa de erro em produção.
 
-- **Autenticação**  
-  - Opções: Reutilizar `SECRET_KEY` ou chave dedicada para JWT; HS256 vs RS256.  
-  - Escolha: **HS256 com `API_MASTER_KEY` dedicada (>=32 chars)** para separar segredos e simplificar emissão/validação sem depender de pares de chave. Mantido fluxo client_credentials mínimo para o desafio.
-
-- **Deploy/CI**  
-  - Opções: Cloud Build trigger vs GitHub Actions com WIF.  
-  - Escolha: **GitHub Actions + WIF** porque o repositório já usa GH, reduz chaves estáticas e mantém pipeline único de build/push/deploy.
-
-- **Plataforma de hiperautomação (Parte 2 - bônus)**  
-  - Opções: Make vs Activepieces vs Zapier.  
-  - Escolha: **Make** pela velocidade de implementação no prazo do desafio, conectores nativos para Google Drive/Sheets e facilidade de demonstração em apresentação técnica.
-  - Trade-off: Activepieces oferece mais controle/self-host, porém com maior esforço inicial de configuração para este contexto de entrega rápida.
-
-- **Configuração/vars**  
-  - Opções: Passar envs inline no deploy ou via Secret Manager.  
-  - Escolha: **Inline + GitHub Secrets** por velocidade; anotado upgrade futuro para Secret Manager se houver tempo/compliance.
-
-- **Escala e recursos**  
-  - Opções: Aumentar concorrência ou instâncias com mais memória.  
-  - Escolha: **concurrency=1 e instância com 4 Gi / 2 vCPU** para priorizar estabilidade do Chromium durante scraping; preferir right-sizing posterior com métricas (latência, memória e taxa de erro) após validar funcionamento fim a fim.
-
-- **Execuções simultâneas (requisito do desafio)**  
-  - Opções: paralelismo alto por requisição em produção vs paralelismo controlado por ambiente.  
-  - Escolha: **suporte a execução simultânea mantido no código** (batch e runner local), com **limite operacional mais conservador em produção** para evitar instabilidade do navegador sob carga.
-
-- **Arquitetura da solução**  
-  - Opções: fluxo concentrado em um único arquivo vs separação por responsabilidades.  
-  - Escolha: **arquitetura simples e modular**, separando bot e API em arquivos com responsabilidades específicas (`navigation`, `extraction`, `browser`, `views`, `auth`), para facilitar manutenção, testes e evolução incremental.
-
-- **Estratégia de navegação no portal**  
-  - Opções: ir direto para a URL interna de pesquisa vs reproduzir o caminho completo do desafio.  
-  - Escolha: **seguir o passo a passo solicitado no desafio** (entrada no portal e navegação até a área de consulta), mesmo existindo opção de pular direto para a tela de pesquisa.
-
-- **Estratégia para buscas por nome**  
-  - Opções: processar qualquer nome retornando grandes listas vs restringir casos ambíguos.  
-  - Escolha: **balancear precisão e aderência ao desafio** com normalização de nomes (acentos/artigos) e regra operacional de selecionar o primeiro resultado quando houver retorno amplo, mantendo rastreabilidade por evidência.
-
-- **Escopo de extração dos benefícios**  
-  - Opções: navegar todas as abas/telas de detalhe vs focar no recorte exigido no desafio.  
-  - Escolha: **focar no escopo principal pedido**, extraindo benefícios exigidos com evidências por tela, sem implementar navegação completa por todas as abas secundárias.
-
-## Desafios encontrados
-- **Card rotativo na home do Portal da Transparência**: o card de “Pessoas Físicas e Jurídicas” rotaciona automaticamente e, sem tratamento, o bot podia ficar preso rolando/tentando interagir. Mitigação: clique com `force=True` para estabilizar a transição para a etapa seguinte.
-- **Intermitência no filtro refinado (`refine=true`)**: em ambiente de nuvem, o bloco `#box-busca-refinada` podia permanecer oculto apesar de existir no DOM, causando timeout ao clicar no filtro “Beneficiário de Programa Social”. Mitigação: remoção de dependência de visibilidade do container, clique com fallback `force=True` e marcação do checkbox com fallback em JavaScript (`checked=true` + evento `change`).
-- **Resultados amplos em consultas por nome**: algumas entradas retornam 900+ registros, com alto custo computacional e baixa confiabilidade para identificar a pessoa correta. Mitigação: aplicar regra de desambiguação e tratar retornos ambíguos como não elegíveis para extração automática.
-- **Evidências e ausência de benefício**: além dos casos positivos, foi necessário tratar explicitamente ausência de benefício com evidência em Base64 para rastreabilidade da execução.
-- **OOM no Cloud Run**: Chromium estourou 512 MiB em configurações menores; mitigado com instância mais robusta, `concurrency=1` e ajustes de timeout.
-- **Env parsing**: `ALLOWED_HOSTS` quebrava no action; resolvido escapando vírgulas no `env_vars`.
-- **Chave JWT curta**: Warnings do PyJWT; exigimos `API_MASTER_KEY` >=32 chars e documentamos no README.
-- **Autorização pública**: 403 inicial; corrigido com `allow-unauthenticated` e binding `allUsers`.
-
-## Decisões de escopo para o desafio
-- O fluxo foi implementado para atender o caminho de navegação esperado no enunciado, priorizando aderência ao desafio sobre otimizações agressivas de atalho de rota.
-- A navegação completa em todas as abas de detalhe não foi implementada nesta versão por decisão consciente de escopo, direcionando esforço para robustez da API, autenticação, evidências e estabilidade de execução.
-- Na API, o parâmetro oficial de refinamento ficou padronizado como `refinar_busca` (com suporte legado a `refine` para evitar quebra de clientes antigos).
+## Referências de evidência
+- Evidências E2E smoke e concorrência: [doc/04-status-do-projeto.md](./04-status-do-projeto.md)
+- Evidência de integração com Google Sheets: [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
+- Evidência do fluxo Make: [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)

@@ -1,3 +1,7 @@
+## Atalhos rápidos
+- Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
+
 ## Visão geral
 - **Aplicação:** Robô de Automação Robótica de Processos (RPA) com abordagem de hiperautomação em Python.
 - **Propósito:** Automatizar a coleta de dados do Portal da Transparência (consulta “Pessoas Físicas e Jurídicas”) e entregar um JSON consolidado com evidência em Base64 para uso em fluxos internos.

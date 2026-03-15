@@ -31,10 +31,7 @@ class ItemConsultaSerializer(serializers.Serializer):
 
 
 def _resolve_refine_flag(payload: Dict[str, Any], default: bool = False) -> bool:
-    # Campo preferencial em português. Mantemos 'refine' por compatibilidade retroativa.
-    if "refinar_busca" in payload:
-        return bool(payload.get("refinar_busca"))
-    return bool(payload.get("refine", default))
+    return bool(payload.get("refinar_busca", default))
 
 
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
@@ -65,7 +62,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
         "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
-        "Compatibilidade: o campo legado 'refine' continua aceito.\n"
         "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
         "em todas as execuções para auditoria.\n"
         "Quando não houver dados cadastrais, `pessoa.nome`, `pessoa.cpf` e `pessoa.localidade` retornam `N/A`."
@@ -86,12 +82,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         OpenApiExample(
             "Lote avançado",
             value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": False}]},
-            request_only=True,
-            media_type='application/json',
-        ),
-        OpenApiExample(
-            "Compatibilidade (legado)",
-            value={"consulta": "04031769644", "refine": True},
             request_only=True,
             media_type='application/json',
         ),
@@ -162,10 +152,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
                 default=False,
                 help_text="Ativa o filtro 'Beneficiário de Programa Social'.",
             ),
-            "refine": serializers.BooleanField(
-                required=False,
-                help_text="Campo legado aceito por compatibilidade.",
-            ),
         },
     ),
     responses=OpenApiTypes.OBJECT,
@@ -187,9 +173,9 @@ def consulta(request: Request):
     payload = request.data if isinstance(request.data, dict) else {}
 
     # Detect batch formats
-    # 1) { "consultas": ["cpf1","cpf2"], "refine": false }
-    # 2) { "itens": [{"consulta": "cpf", "refine": true}, ...] }
-    # 3) Single: { "consulta": "cpf", "refine": false }
+    # 1) { "consultas": ["cpf1","cpf2"], "refinar_busca": false }
+    # 2) { "itens": [{"consulta": "cpf", "refinar_busca": true}, ...] }
+    # 3) Single: { "consulta": "cpf", "refinar_busca": false }
 
     resultados: List[Dict[str, Any]] = []
 
@@ -250,12 +236,12 @@ def consulta(request: Request):
             ordered_inputs = []
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
-                refine = _resolve_refine_flag(item, default=False)
-                ordered_inputs.append((c, refine))
+                refinar_busca = _resolve_refine_flag(item, default=False)
+                ordered_inputs.append((c, refinar_busca))
                 if not c:
                     resultados.append({"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'})
                     continue
-                future_map[executor.submit(_run_single, c, refine)] = idx
+                future_map[executor.submit(_run_single, c, refinar_busca)] = idx
 
             # prefill results list preserving order
             if resultados:
@@ -266,7 +252,7 @@ def consulta(request: Request):
 
             for fut in as_completed(future_map):
                 idx = future_map[fut]
-                c, refine = ordered_inputs[idx]
+                c, refinar_busca = ordered_inputs[idx]
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
@@ -297,7 +283,7 @@ def consulta(request: Request):
         logging.INFO,
         "api_consulta_recebida",
         consulta=mascarar_identificador(str(consulta_param)),
-        refine=refine_param,
+        refinar_busca=refine_param,
     )
     try:
         resultado = _run_single(consulta_param, refine_param)

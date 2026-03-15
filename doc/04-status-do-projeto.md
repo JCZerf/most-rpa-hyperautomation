@@ -1,3 +1,7 @@
+## Atalhos rápidos
+- Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
+
 ## Status por requisito (doc/02)
 
 - Backend Django exposto como API: **feito** (Cloud Run, deploy automático).
