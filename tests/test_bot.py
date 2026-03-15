@@ -82,9 +82,16 @@ def test_bot_zero_result(monkeypatch, dummy_browser_ctx):
 
     assert result["meta"]["resultados_encontrados"] == 0
     assert result["pessoa"]["consulta"] == "FULANO TESTE"
+    assert result["pessoa"]["nome"] == "N/A"
+    assert result["pessoa"]["cpf"] == "N/A"
+    assert result["pessoa"]["localidade"] == "N/A"
     assert result["status"] == "error"
     assert "Não foi possível retornar" in result["error"]
     assert result["beneficios"] == []
+    assert result["id_consulta"]
+    assert result["data_hora_consulta"]
+    assert result["meta"]["id_consulta"] == result["id_consulta"]
+    assert result["meta"]["data_hora_consulta"] == result["data_hora_consulta"]
 
 
 def test_bot_sem_beneficio(monkeypatch, dummy_browser_ctx):
@@ -143,6 +150,10 @@ def test_bot_com_beneficio(monkeypatch, dummy_browser_ctx):
     assert result["beneficios"][0]["tipo"] == "Auxílio Brasil"
     assert result["meta"]["beneficios_encontrados"] == ["Auxílio Brasil"]
     assert result["meta"]["resultados_encontrados"] == 2
+    assert result["id_consulta"]
+    assert result["data_hora_consulta"]
+    assert result["meta"]["id_consulta"] == result["id_consulta"]
+    assert result["meta"]["data_hora_consulta"] == result["data_hora_consulta"]
 
 
 def test_bot_nome_inexistente(monkeypatch, dummy_browser_ctx):

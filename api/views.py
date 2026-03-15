@@ -64,7 +64,10 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
         "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
-        "Compatibilidade: o campo legado 'refine' continua aceito."
+        "Compatibilidade: o campo legado 'refine' continua aceito.\n"
+        "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
+        "em todas as execuções para auditoria.\n"
+        "Quando não houver dados cadastrais, `pessoa.nome`, `pessoa.cpf` e `pessoa.localidade` retornam `N/A`."
     ),
     examples=[
         OpenApiExample(
@@ -89,6 +92,57 @@ def _status_from_result(res: Dict[str, Any]) -> str:
             "Compatibilidade (legado)",
             value={"consulta": "04031769644", "refine": True},
             request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Resposta: sucesso",
+            value={
+                "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+                "data_hora_consulta": "15/03/2026 12:45",
+                "pessoa": {
+                    "consulta": "04031769644",
+                    "nome": "NOME DA PESSOA",
+                    "cpf": "***.***.***-**",
+                    "localidade": "UF",
+                    "quantidade_beneficios": 1,
+                },
+                "beneficios": [],
+                "meta": {
+                    "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
+                    "data_hora_consulta": "15/03/2026 12:45",
+                    "resultados_encontrados": 1,
+                    "beneficios_encontrados": ["Auxílio Brasil"],
+                    "panorama_relacao": "<base64>",
+                },
+            },
+            response_only=True,
+            status_codes=["200"],
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Resposta: erro de negócio (sem resultado)",
+            value={
+                "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
+                "data_hora_consulta": "15/03/2026 12:46",
+                "status": "error",
+                "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+                "pessoa": {
+                    "consulta": "04031769644",
+                    "nome": "N/A",
+                    "cpf": "N/A",
+                    "localidade": "N/A",
+                },
+                "beneficios": [],
+                "meta": {
+                    "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
+                    "data_hora_consulta": "15/03/2026 12:46",
+                    "resultados_encontrados": 0,
+                    "evidencia_resultados_zero": "<base64>",
+                    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
+                },
+            },
+            response_only=True,
+            status_codes=["200"],
             media_type='application/json',
         ),
     ],
