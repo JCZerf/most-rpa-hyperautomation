@@ -59,6 +59,7 @@ def main():
         "A LIDA PEREIRA FIALHO",
         "A ANNE CHRISTINE SILVA RIBEIRO", 
     ]
+    
 
     if len(lista_alvos) > MAX_ALVOS:
         raise ValueError(f"Máximo permitido: {MAX_ALVOS} alvos por execução local")
