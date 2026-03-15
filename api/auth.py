@@ -7,13 +7,9 @@ from jwt import InvalidTokenError, ExpiredSignatureError
 
 
 def _get_signing_key() -> str:
-    """
-    Returns the symmetric key used to sign/validate JWTs.
-    Prefers API_MASTER_KEY; falls back to SECRET_KEY for backward compatibility.
-    """
-    key = settings.API_MASTER_KEY or settings.SECRET_KEY
+    key = settings.API_MASTER_KEY
     if not key:
-        raise ValueError("API_MASTER_KEY (or SECRET_KEY) must be set to sign JWTs.")
+        raise ValueError("API_MASTER_KEY must be set to sign JWTs.")
     if len(key) < 32:
         # PyJWT emite warning; garantimos requisito mínimo do RFC 7518.
         raise ValueError("API_MASTER_KEY must be at least 32 characters for HS256.")

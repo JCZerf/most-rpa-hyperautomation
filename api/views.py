@@ -18,7 +18,10 @@ from .auth import issue_token, validate_token, scope_allows
 logger = logging.getLogger(__name__)
 
 MAX_BATCH = 3
-MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+try:
+    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+except (TypeError, ValueError):
+    MAX_WORKERS = 1
 
 
 class ItemConsultaSerializer(serializers.Serializer):
@@ -31,7 +34,21 @@ class ItemConsultaSerializer(serializers.Serializer):
 
 
 def _resolve_refine_flag(payload: Dict[str, Any], default: bool = False) -> bool:
-    return bool(payload.get("refinar_busca", default))
+    raw = payload.get("refinar_busca", default)
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return default
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in {"1", "true", "yes", "on"}:
+            return True
+        if v in {"0", "false", "no", "off", ""}:
+            return False
+        return default
+    return bool(raw)
 
 
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
@@ -158,7 +175,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
 )
 @api_view(['POST'])
 def consulta(request: Request):
-    # Auth: exige Bearer token emitido pelo endpoint /api/token/
     auth_header = request.headers.get("Authorization") or ""
     if not auth_header.startswith("Bearer "):
         return JsonResponse({"status": "error", "error": "Missing bearer token"}, status=401)
@@ -169,13 +185,7 @@ def consulta(request: Request):
     if not scope_allows(claims, ["bot:read"]):
         return JsonResponse({"status": "error", "error": "Insufficient scope"}, status=403)
 
-    # request is a DRF Request; use request.data for parsed JSON
     payload = request.data if isinstance(request.data, dict) else {}
-
-    # Detect batch formats
-    # 1) { "consultas": ["cpf1","cpf2"], "refinar_busca": false }
-    # 2) { "itens": [{"consulta": "cpf", "refinar_busca": true}, ...] }
-    # 3) Single: { "consulta": "cpf", "refinar_busca": false }
 
     resultados: List[Dict[str, Any]] = []
 
@@ -233,26 +243,20 @@ def consulta(request: Request):
         workers = min(MAX_WORKERS, len(itens))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {}
-            ordered_inputs = []
+            ordered_inputs = {}
+            resultados = [None] * len(itens)
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
                 refinar_busca = _resolve_refine_flag(item, default=False)
-                ordered_inputs.append((c, refinar_busca))
                 if not c:
-                    resultados.append({"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'})
+                    resultados[idx] = {"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'}
                     continue
+                ordered_inputs[idx] = (c, refinar_busca)
                 future_map[executor.submit(_run_single, c, refinar_busca)] = idx
-
-            # prefill results list preserving order
-            if resultados:
-                # results already has items for missing consulta; ensure length matches
-                resultados += [None] * (len(itens) - len(resultados))
-            else:
-                resultados = [None] * len(itens)
 
             for fut in as_completed(future_map):
                 idx = future_map[fut]
-                c, refinar_busca = ordered_inputs[idx]
+                c, _ = ordered_inputs[idx]
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
@@ -362,6 +366,13 @@ def token(request: Request):
 
     if client_id != expected_id or client_secret != expected_secret:
         return _json_error("Credenciais do cliente inválidas", 401)
+
+    requested_scopes = str(scope or "").split()
+    allowed_scopes = {"bot:read"}
+    if not requested_scopes:
+        return _json_error('Parâmetro "scope" inválido', 400)
+    if not all(s in allowed_scopes for s in requested_scopes):
+        return _json_error('Parâmetro "scope" inválido', 400)
 
     ttl = getattr(dj_settings, "API_TOKEN_TTL", 600)
     token_value, exp = issue_token(client_id, ttl, scope, dj_settings.OAUTH_AUDIENCE)

@@ -9,6 +9,7 @@ def client(settings):
     settings.OAUTH_CLIENT_ID = "client-id"
     settings.OAUTH_CLIENT_SECRET = "client-secret"
     settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
+    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
     return APIClient()
 
 
@@ -54,3 +55,20 @@ def test_token_invalid_grant(client):
     data = resp.json()
     assert data["status"] == "error"
     assert "grant_type" in data["error"]
+
+
+def test_token_invalid_scope(client):
+    resp = client.post(
+        "/api/token/",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": "client-id",
+            "client_secret": "client-secret",
+            "scope": "admin:all",
+        },
+        format="json",
+    )
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "scope" in data["error"]

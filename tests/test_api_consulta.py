@@ -7,6 +7,7 @@ def client(settings, monkeypatch):
     settings.OAUTH_CLIENT_ID = "client-id"
     settings.OAUTH_CLIENT_SECRET = "client-secret"
     settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
+    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
     settings.API_TOKEN_TTL = 600
     settings.OAUTH_AUDIENCE = "most-rpa-api"
 
@@ -66,6 +67,7 @@ def test_consulta_insufficient_scope(settings):
     settings.OAUTH_CLIENT_ID = "client-id"
     settings.OAUTH_CLIENT_SECRET = "client-secret"
     settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
+    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
     settings.OAUTH_AUDIENCE = "most-rpa-api"
     api_client = APIClient()
     resp_token = api_client.post(
@@ -156,3 +158,43 @@ def test_consulta_batch_marks_error_status_item(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["resultados"][0]["status"] == "error"
+
+
+def test_consulta_itens_missing_consulta_preserva_ordem(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        return {"status": "ok", "pessoa": {"consulta": consulta_param}, "beneficios": [], "meta": {}}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    payload = {
+        "itens": [
+            {"consulta": "A LIDA PEREIRA FIALHO"},
+            {},
+            {"consulta": "A ANNE CHRISTINE SILVA RIBEIRO", "refinar_busca": True},
+        ]
+    }
+    resp = client.post("/api/consulta/", data=payload, format="json")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resultados"][0]["status"] == "ok"
+    assert data["resultados"][0]["consulta"] == "A LIDA PEREIRA FIALHO"
+    assert data["resultados"][1]["status"] == "error"
+    assert "ausente" in data["resultados"][1]["error"]
+    assert data["resultados"][2]["status"] == "ok"
+    assert data["resultados"][2]["consulta"] == "A ANNE CHRISTINE SILVA RIBEIRO"
+
+
+def test_consulta_single_refinar_busca_string_false(client, monkeypatch):
+    calls = []
+
+    def fake_run_single(consulta_param, refine_param):
+        calls.append(refine_param)
+        return {"status": "ok", "pessoa": {"consulta": consulta_param}, "beneficios": [], "meta": {}}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post(
+        "/api/consulta/",
+        data={"consulta": "FULANO TESTE", "refinar_busca": "false"},
+        format="multipart",
+    )
+    assert resp.status_code == 200
+    assert calls == [False]
