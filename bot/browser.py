@@ -6,7 +6,7 @@ from playwright.sync_api import Playwright
 
 def create_browser_context(pw: Playwright, headless: bool, user_agent: str, viewport: dict, locale: str, timezone_id: str) -> Tuple[Any, Any, Any]:
     slow_mo = int(os.getenv("PLAYWRIGHT_SLOW_MO_MS", "0"))
-    channel = os.getenv("PLAYWRIGHT_CHANNEL", "chrome").strip() or "chrome"
+    channel = os.getenv("PLAYWRIGHT_CHANNEL", "chromium").strip() or "chromium"
     use_stealth_flags = os.getenv("PLAYWRIGHT_USE_STEALTH_FLAGS", "false").strip().lower() in {"1", "true", "yes"}
     hide_webdriver = os.getenv("PLAYWRIGHT_HIDE_WEBDRIVER", "false").strip().lower() in {"1", "true", "yes"}
     storage_state_path = os.getenv("PLAYWRIGHT_STORAGE_STATE_PATH", "").strip()
