@@ -26,9 +26,9 @@
 
 ## Fora de escopo
 - Qualquer edição ou correção de dados no Portal da Transparência.
-- Armazenamento persistente de longo prazo (banco próprio); saída limitada ao JSON gerado por execução.
+- Persistência em banco de dados próprio da aplicação (a API retorna JSON por execução e não grava histórico em DB interno).
 - Autenticação/logon em áreas restritas do portal (uso apenas de consulta pública).
-- Integração direta com sistemas externos além do fornecimento do JSON.
+- Desenvolvimento de conectores proprietários para ERPs/CRMs legados além da automação já entregue via Make + Google Drive + Google Sheets.
 
 ## Premissas
 - Portal da Transparência permanece acessível publicamente sem autenticação para consultas de pessoas físicas.
@@ -36,7 +36,7 @@
 - Ambiente de execução tem conectividade estável e permite captura de tela.
 
 ## Restrições
-- Conformidade com LGPD: uso mínimo de dados pessoais, armazenamento apenas transitório, trilha de auditoria das execuções.
+- Conformidade com LGPD: uso mínimo de dados pessoais, trilha de auditoria das execuções e política de retenção/expurgo para qualquer persistência externa (ex.: Drive/Sheets).
 - Dependência de estabilidade e layout do Portal da Transparência; mudanças podem quebrar seletores.
 - Tempo de execução deve ser compatível com janelas operacionais do time (definir SLA posteriormente).
 
