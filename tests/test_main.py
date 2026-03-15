@@ -14,9 +14,10 @@ def test_anexar_tempo_execucao_dict():
 
 def test_executar_para_alvo_inclui_duracao(monkeypatch, tmp_path):
     class FakeBot:
-        def __init__(self, headless, alvo):
+        def __init__(self, headless, alvo, usar_refine=False):
             self.headless = headless
             self.alvo = alvo
+            self.usar_refine = usar_refine
 
         def run(self):
             return {"pessoa": {"consulta": self.alvo}, "beneficios": [], "meta": {}}
@@ -50,7 +51,7 @@ def test_main_loga_tempo_total(monkeypatch, caplog):
 
     times = iter([100.0, 101.2])  # 1200ms
     monkeypatch.setattr(main, "ThreadPoolExecutor", DummyExecutor)
-    monkeypatch.setattr(main, "executar_para_alvo", lambda alvo: {"status": "ok", "meta": {}})
+    monkeypatch.setattr(main, "executar_para_alvo", lambda *args, **kwargs: {"status": "ok", "meta": {}})
     monkeypatch.setattr(main.time, "perf_counter", lambda: next(times))
 
     caplog.set_level(logging.INFO)

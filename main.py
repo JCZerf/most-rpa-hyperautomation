@@ -33,13 +33,14 @@ def _anexar_tempo_execucao(resultado, duracao_ms):
     resultado["duracao_execucao_ms"] = duracao_ms
     return resultado
 
-def executar_para_alvo(identificador_alvo):
+
+def executar_para_alvo(identificador_alvo, headless=False, usar_refine=False):
     """Função que será executada em paralelo para cada CPF/Nome."""
     logger.info(f"Iniciando thread para o alvo: {identificador_alvo}")
     inicio = time.perf_counter()
     
     # Instancia o bot em modo headless conforme o desafio pede
-    bot = TransparencyBot(headless=False, alvo=identificador_alvo)
+    bot = TransparencyBot(headless=headless, alvo=identificador_alvo, usar_refine=usar_refine)
     
     try:
         resultado = bot.run()
@@ -75,20 +76,56 @@ def main():
     logger.info("--- Iniciando Hyperautomation Most RPA ---")
     logger.info(f"Log da execução salvo em: {LOG_FILE}")
     inicio_total = time.perf_counter()
-    
-    # LISTA DE ALVOS PARA EXECUÇÃO SIMULTÂNEA
-    lista_alvos = [
-        "04031769644",  # Exemplo de NIS CPF
-        "A ANNE CHRISTINE SILVA RIBEIRO",  # Exemplo de Nome
-        "A LIDA PEREIRA FIALHO"    # Exemplo de Nome
-    ]
+
+    # ===== CONFIGURAÇÃO RÁPIDA DE TESTE (EDITE AQUI) =====
+    TEST_CONFIG = {
+        # "um" = executa só um alvo | "grupo" = executa lista de alvos
+        "modo_execucao": "grupo",
+        "alvo_unico": "04031769644",
+        "grupo_alvos": [
+            "04031769644",
+            "A ANNE CHRISTINE SILVA RIBEIRO",
+            "A LIDA PEREIRA FIALHO",
+        ],
+        "headless": False,       # True = sem abrir janela | False = visual
+        "refinar_busca": False,  # True = usa filtro beneficiário | False = busca simples
+        "max_workers": 3,        # máximo de threads no modo grupo
+    }
+    # ================================================
+
+    modo_execucao = TEST_CONFIG["modo_execucao"]
+    if modo_execucao not in {"um", "grupo"}:
+        raise ValueError("modo_execucao inválido. Use 'um' ou 'grupo'.")
+
+    if modo_execucao == "um":
+        lista_alvos = [TEST_CONFIG["alvo_unico"]]
+    else:
+        lista_alvos = TEST_CONFIG["grupo_alvos"]
 
     if len(lista_alvos) > MAX_ALVOS:
         raise ValueError(f"Máximo permitido: {MAX_ALVOS} alvos por execução local")
 
+    max_workers = min(int(TEST_CONFIG["max_workers"]), len(lista_alvos))
+    logger.info(
+        "Configuração de teste: modo=%s headless=%s refinar_busca=%s max_workers=%s",
+        modo_execucao,
+        TEST_CONFIG["headless"],
+        TEST_CONFIG["refinar_busca"],
+        max_workers,
+    )
+
     # max_workers define quantos navegadores abrirão AO MESMO TEMPO
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        list(executor.map(executar_para_alvo, lista_alvos))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        list(
+            executor.map(
+                lambda alvo: executar_para_alvo(
+                    alvo,
+                    headless=TEST_CONFIG["headless"],
+                    usar_refine=TEST_CONFIG["refinar_busca"],
+                ),
+                lista_alvos,
+            )
+        )
 
     duracao_total_ms = int((time.perf_counter() - inicio_total) * 1000)
     logger.info(f"--- Todas as execuções foram finalizadas --- (tempo_total_execucao_ms={duracao_total_ms})")
