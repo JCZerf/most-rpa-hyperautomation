@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import Any, Dict, Optional
 from playwright.sync_api import sync_playwright
 
@@ -36,10 +37,7 @@ class TransparencyBot:
             browser, context, page = create_browser_context(
                 pw,
                 headless=self.headless,
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                ),
+                user_agent=os.getenv("PLAYWRIGHT_USER_AGENT", "").strip(),
                 viewport={"width": 1280, "height": 720},
                 locale="pt-BR",
                 timezone_id="America/Sao_Paulo",
