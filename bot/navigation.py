@@ -1,10 +1,59 @@
 import logging
 import datetime
 import base64
+import re
+import unicodedata
 from zoneinfo import ZoneInfo
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+STOPWORDS_NOME = {"A", "O", "AS", "OS", "DE", "DA", "DO", "DAS", "DOS", "E"}
+
+
+def _normalizar_nome(texto: str) -> str:
+    base = unicodedata.normalize("NFD", texto or "")
+    base = "".join(ch for ch in base if unicodedata.category(ch) != "Mn")
+    base = re.sub(r"[^A-Za-z0-9\s]", " ", base).upper()
+    return re.sub(r"\s+", " ", base).strip()
+
+
+def _tokens_nome(texto_normalizado: str) -> List[str]:
+    tokens = [t for t in texto_normalizado.split() if t not in STOPWORDS_NOME and len(t) > 2]
+    return tokens or texto_normalizado.split()
+
+
+def _score_nome_proximidade(alvo: str, candidato: str) -> int:
+    alvo_n = _normalizar_nome(alvo)
+    cand_n = _normalizar_nome(candidato)
+    if not alvo_n or not cand_n:
+        return 0
+    if alvo_n == cand_n:
+        return 100
+    if alvo_n in cand_n:
+        return 95
+    if cand_n in alvo_n:
+        return 90
+
+    tokens = _tokens_nome(alvo_n)
+    if not tokens:
+        return 0
+    acertos = sum(1 for t in tokens if t in cand_n)
+    ratio = acertos / len(tokens)
+    bonus_inicio = 0.05 if cand_n.startswith(tokens[0]) else 0
+    return int((ratio + bonus_inicio) * 100)
+
+
+def _escolher_indice_nome_mais_proximo(alvo: str, nomes_encontrados: List[str]) -> Tuple[Optional[int], int]:
+    if not nomes_encontrados:
+        return None, 0
+    melhor_idx = 0
+    melhor_score = -1
+    for idx, nome in enumerate(nomes_encontrados):
+        score = _score_nome_proximidade(alvo, nome)
+        if score > melhor_score:
+            melhor_idx = idx
+            melhor_score = score
+    return melhor_idx, melhor_score
 
 
 def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Dict[str, Any]:
@@ -62,14 +111,32 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     quantidade = int(quantidade_texto.replace('.', '')) if quantidade_texto else 0
     logger.info(f"Resultados encontrados: {quantidade}")
 
+    indice_escolhido = 0
     if quantidade > 0:
-        primeiro_resultado_nome = page.locator(".link-busca-nome").first.inner_text().strip().upper()
+        links_nomes = page.locator(".link-busca-nome")
         if any(ch.isdigit() for ch in alvo):
-            logger.info("Termo contém dígitos; pulando verificação por nome (busca por NIS/CPF).")
+            logger.info("Termo contém dígitos; pulando comparação por nome (consulta por NIS/CPF).")
         else:
-            if alvo.upper() not in primeiro_resultado_nome:
-                logger.warning(f"Resultados genéricos detectados ({primeiro_resultado_nome}). Tratando como não encontrado.")
-                quantidade = 0
+            total_links = links_nomes.count()
+            nomes_encontrados: List[str] = []
+            for i in range(total_links):
+                try:
+                    nomes_encontrados.append(links_nomes.nth(i).inner_text().strip())
+                except Exception:
+                    nomes_encontrados.append("")
+            idx_melhor, score_melhor = _escolher_indice_nome_mais_proximo(alvo, nomes_encontrados)
+            if idx_melhor is None:
+                logger.warning("Não foi possível calcular melhor correspondência para '%s'. Usando primeiro resultado.", alvo)
+                indice_escolhido = 0
+            else:
+                indice_escolhido = idx_melhor
+                logger.info(
+                    "Selecionando resultado mais próximo para '%s': índice=%s score=%s nome='%s'",
+                    alvo,
+                    indice_escolhido,
+                    score_melhor,
+                    nomes_encontrados[indice_escolhido],
+                )
 
     if quantidade == 0:
         agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
@@ -92,6 +159,6 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
             "mensagem": mensagem,
         }
 
-    # Seleciona o primeiro resultado quando houver
-    page.locator(".link-busca-nome").first.click()
+    # Seleciona o resultado escolhido quando houver.
+    page.locator(".link-busca-nome").nth(indice_escolhido).click()
     return {"zero": False, "quantidade": quantidade}
