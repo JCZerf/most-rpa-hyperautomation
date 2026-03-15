@@ -7,6 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from bot.scraper import TransparencyBot
 
 MAX_ALVOS = 3
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / f"execucao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 # Configuração do logging
 logging.basicConfig(
@@ -14,8 +17,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("bot_execution.log", encoding="utf-8")
-    ]
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+    ],
+    force=True,
 )
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,7 @@ def executar_para_alvo(identificador_alvo):
 
 def main():
     logger.info("--- Iniciando Hyperautomation Most RPA ---")
+    logger.info(f"Log da execução salvo em: {LOG_FILE}")
     inicio_total = time.perf_counter()
     
     # LISTA DE ALVOS PARA EXECUÇÃO SIMULTÂNEA

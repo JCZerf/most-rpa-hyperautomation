@@ -26,14 +26,18 @@ most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
+├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
+├── output/                   # Resultados JSON gerados nas execuções locais
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
+├── example.env               # Template de variáveis de ambiente
 ├── main.py                   # Runner local para execuções em lote
 ├── manage.py                 # Comando de gerenciamento Django
 ├── requirements.txt          # Dependências Python
-└── README.md                 # Guia de uso e operação
+├── README.md                 # Guia de uso e operação
+└── logs/                     # Logs locais por execução do runner (gerado em runtime)
 ```
 
 ## Fluxo da API
@@ -208,15 +212,15 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
       }
     },
     {
-      "consulta": "NOME INEXISTENTE",
+      "consulta": "123ABC",
       "status": "invalid",
       "resultado": {
         "status": "invalid",
-        "error": "...",
+        "error": "Entrada inválida: use CPF/NIS com 11 dígitos ou nome válido.",
         "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
         "data_hora_consulta": "14/03/2026 - 10:32",
         "pessoa": {
-          "consulta": "NOME INEXISTENTE",
+          "consulta": "123ABC",
           "nome": "N/A",
           "cpf": "N/A",
           "localidade": "N/A"
@@ -287,16 +291,28 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 | `PLAYWRIGHT_USER_AGENT` | Não | UA padrão do projeto | Define User-Agent customizado para contexto do browser. |
 | `PLAYWRIGHT_SLOW_MO_MS` | Não | `0` | Delay entre ações do Playwright (ms), útil para debug/estabilidade. |
 
-### Flags operacionais opcionais
-| Variável | Obrigatória | Valor padrão | Função |
-|---|---|---|---|
-| `WAF_DETECTION_ENABLED` | Não | `false` | Flag reservada para estratégia de detecção de bloqueio; mantida desligada para evitar falso positivo. |
 
 ## Testes
+
+### Testes locais rápidos (sem ambiente externo)
+```bash
+pytest -q -m "not e2e"
+```
+
+Cobertura principal desse bloco:
+- `tests/test_validators.py`: validação de CPF/NIS/nome.
+- `tests/test_navigation.py`: score de nome e escolha do resultado mais próximo.
+- `tests/test_bot.py`: contrato de saída do bot (`N/A`, `id_consulta`, `data_hora_consulta`, erros e evidências).
+- `tests/test_browser_env.py`: leitura de envs do Playwright/browser.
+- `tests/test_main.py`: runner local (`main.py`), duração e comportamento de execução.
+- `tests/test_api_token.py`: geração e validação básica de token.
+- `tests/test_api_consulta.py`: endpoint `/api/consulta` (single/lote), autenticação, limites e erros.
+
+### Rodar toda a suíte (inclui E2E se configurado)
 ```bash
 pytest
 ```
-Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `/api/consulta/`) com mocks para evitar abrir o navegador.
+Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pytest -q -m "not e2e"`.
 
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
@@ -353,7 +369,6 @@ E2E_REQUIRE_SUCCESS=true \
 
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD.
-- Não versione segredos reais no repositório. Use `example.env` como referência, mantenha `.env` fora do Git e injete credenciais via secrets do ambiente (ex.: GitHub Secrets/Cloud Run).
 - A API não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta.
 - No fluxo externo de hiperautomação (Make -> Google Drive/Google Sheets), há persistência de artefatos/dados; aplique política de retenção/expurgo, controle de acesso e minimização de dados.
 - Evidências em Base64 são transitórias no fluxo da API, mas podem ser armazenadas externamente quando integrações estiverem habilitadas.
