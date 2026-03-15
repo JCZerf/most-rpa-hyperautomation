@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import datetime
@@ -28,7 +27,6 @@ class TransparencyBot:
         self.headless = headless
         self.url_base = "https://portaldatransparencia.gov.br/"
         self.alvo = alvo
-        # True para usar busca refinada, False para busca simples (Lupa)
         self.usar_refine = usar_refine
 
     @staticmethod
@@ -61,31 +59,123 @@ class TransparencyBot:
         out["meta"] = meta
         return out
 
+    def _validar_entrada(self) -> tuple[bool, Optional[Dict[str, Any]]]:
+        if not self.alvo:
+            log_event(logger, logging.WARNING, "entrada_invalida", motivo="alvo_ausente")
+            return False, {"status": "invalid", "error": "Parâmetro 'alvo' não definido."}
+
+        valido, _tipo, alvo_normalizado, motivo = classificar_consulta(self.alvo)
+        if not valido:
+            log_event(logger, logging.WARNING, "entrada_invalida", motivo=motivo)
+            return False, {"status": "invalid", "error": motivo, "consulta": self.alvo}
+
+        self.alvo = alvo_normalizado
+        return True, None
+
+    def _preparar_detalhes_beneficio(self, page: Any) -> None:
+        botao_acordeon = page.get_by_role("button", name="Recebimentos de recursos")
+        botao_acordeon.scroll_into_view_if_needed()
+        botao_acordeon.dispatch_event("click")
+
+        btn_detalhar = page.locator("a:text('Detalhar')").first
+        try:
+            btn_detalhar.wait_for(state="visible", timeout=8000)
+        except Exception:
+            logger.warning("Botão detalhar não apareceu, tentando clique forçado no acordeão...")
+            botao_acordeon.click(force=True)
+            btn_detalhar.wait_for(state="visible", timeout=5000)
+
+    def _resposta_sem_resultado(self, search_result: Dict[str, Any]) -> Dict[str, Any]:
+        log_event(logger, logging.INFO, "consulta_sem_resultado", alvo=self.alvo)
+        return {
+            "status": "error",
+            "error": search_result.get("mensagem"),
+            "pessoa": {"consulta": self.alvo, "nome": "N/A", "cpf": "N/A", "localidade": "N/A"},
+            "beneficios": [],
+            "meta": {
+                "resultados_encontrados": 0,
+                "evidencia_resultados_zero": search_result.get("evidencia_base64"),
+                "mensagem": search_result.get("mensagem"),
+            },
+        }
+
+    def _resposta_sem_beneficios(
+        self,
+        search_result: Dict[str, Any],
+        pessoal: Dict[str, Any],
+        benefits_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return {
+            "pessoa": {
+                **self._normalizar_pessoa(pessoal),
+                "nis": None,
+                "quantidade_beneficios": 0,
+                "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+            },
+            "beneficios": [],
+            "meta": {
+                "resultados_encontrados": search_result.get("quantidade"),
+                "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
+                "evidencia_sem_beneficio": benefits_data.get("panorama_base64"),
+                "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
+                "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+            },
+        }
+
+    def _resposta_final(
+        self,
+        search_result: Dict[str, Any],
+        pessoal: Dict[str, Any],
+        benefits_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        resultado_final = {
+            "pessoa": {
+                **self._normalizar_pessoa(pessoal),
+                "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0),
+                "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+            },
+            "beneficios": benefits_data.get("beneficios_resultado"),
+            "meta": {
+                "resultados_encontrados": search_result.get("quantidade"),
+                "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
+                "panorama_relacao": benefits_data.get("panorama_base64"),
+                "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
+                "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
+            },
+        }
+        log_event(
+            logger,
+            logging.INFO,
+            "consulta_concluida",
+            alvo=self.alvo,
+            nome=pessoal.get("nome") if pessoal else self.alvo,
+            resultados=search_result.get("quantidade", 0),
+        )
+        return resultado_final
+
+    def _executar_fluxo(self, context: Any, page: Any) -> Dict[str, Any]:
+        search_result = perform_search(page, self.url_base, self.alvo, self.usar_refine)
+        if search_result.get("zero"):
+            return self._resposta_sem_resultado(search_result)
+
+        pessoal = extract_personal_info(page)
+        self._preparar_detalhes_beneficio(page)
+        benefits_data = extract_benefits(context, page, self.url_base)
+
+        if not benefits_data.get("beneficios_encontrados"):
+            return self._resposta_sem_beneficios(search_result, pessoal, benefits_data)
+
+        return self._resposta_final(search_result, pessoal, benefits_data)
+
     def run(self) -> Dict[str, Any]:
         id_consulta = str(uuid4())
         data_hora_consulta = self._agora_consulta()
         token_id = bind_id_consulta(id_consulta)
 
         try:
-            if not self.alvo:
-                log_event(logger, logging.WARNING, "entrada_invalida", motivo="alvo_ausente")
-                return self._com_auditoria(
-                    {"status": "invalid", "error": "Parâmetro 'alvo' não definido."},
-                    id_consulta,
-                    data_hora_consulta,
-                )
-
-            valido, tipo, alvo_normalizado, motivo = classificar_consulta(self.alvo)
-            if not valido:
-                log_event(logger, logging.WARNING, "entrada_invalida", motivo=motivo)
-                return self._com_auditoria(
-                    {"status": "invalid", "error": motivo, "consulta": self.alvo},
-                    id_consulta,
-                    data_hora_consulta,
-                )
-
-            # usa valor normalizado
-            self.alvo = alvo_normalizado
+            ok, erro_validacao = self._validar_entrada()
+            if not ok:
+                return self._com_auditoria(erro_validacao, id_consulta, data_hora_consulta)
 
             with sync_playwright() as pw:
                 browser, context, page = create_browser_context(
@@ -98,84 +188,8 @@ class TransparencyBot:
                 )
 
                 try:
-                    # Navegação e busca
-                    search_result = perform_search(page, self.url_base, self.alvo, self.usar_refine)
-                    if search_result.get("zero"):
-                        log_event(logger, logging.INFO, "consulta_sem_resultado", alvo=self.alvo)
-                        return self._com_auditoria({
-                            "status": "error",
-                            "error": search_result.get("mensagem"),
-                            "pessoa": {"consulta": self.alvo, "nome": "N/A", "cpf": "N/A", "localidade": "N/A"},
-                            "beneficios": [],
-                            "meta": {
-                                "resultados_encontrados": 0,
-                                "evidencia_resultados_zero": search_result.get("evidencia_base64"),
-                                "mensagem": search_result.get("mensagem"),
-                            },
-                        }, id_consulta, data_hora_consulta)
-
-                    # Extração de dados cadastrais
-                    pessoal = extract_personal_info(page)
-
-                    # Acordeão e detalhamento (extrair benefícios)
-                    botao_acordeon = page.get_by_role("button", name="Recebimentos de recursos")
-                    botao_acordeon.scroll_into_view_if_needed()
-                    botao_acordeon.dispatch_event("click")
-
-                    btn_detalhar = page.locator("a:text('Detalhar')").first
-                    try:
-                        btn_detalhar.wait_for(state="visible", timeout=8000)
-                    except Exception:
-                        logger.warning("Botão detalhar não apareceu, tentando clique forçado no acordeão...")
-                        botao_acordeon.click(force=True)
-                        btn_detalhar.wait_for(state="visible", timeout=5000)
-
-                    benefits_data = extract_benefits(context, page, self.url_base)
-
-                    # Se nenhum benefício encontrado, montar retorno similar ao original
-                    if not benefits_data.get("beneficios_encontrados"):
-                        return self._com_auditoria({
-                            "pessoa": {
-                                **self._normalizar_pessoa(pessoal),
-                                "nis": None,
-                                "quantidade_beneficios": 0,
-                                "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
-                            },
-                            "beneficios": [],
-                            "meta": {
-                                "resultados_encontrados": search_result.get("quantidade"),
-                                "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
-                                "evidencia_sem_beneficio": benefits_data.get("panorama_base64"),
-                                "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
-                                "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
-                            },
-                        }, id_consulta, data_hora_consulta)
-
-                    resultado_final = {
-                        "pessoa": {
-                            **self._normalizar_pessoa(pessoal),
-                            "quantidade_beneficios": benefits_data.get("quantidade_beneficios", 0),
-                            "total_recursos_favorecidos": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
-                        },
-                        "beneficios": benefits_data.get("beneficios_resultado"),
-                        "meta": {
-                            "resultados_encontrados": search_result.get("quantidade"),
-                            "beneficios_encontrados": benefits_data.get("beneficios_encontrados"),
-                            "panorama_relacao": benefits_data.get("panorama_base64"),
-                            "total_valor_recebido": benefits_data.get("total_valor_recebido", 0.0),
-                            "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
-                        },
-                    }
-
-                    log_event(
-                        logger,
-                        logging.INFO,
-                        "consulta_concluida",
-                        alvo=self.alvo,
-                        nome=pessoal.get("nome") if pessoal else self.alvo,
-                        resultados=search_result.get("quantidade", 0),
-                    )
-                    return self._com_auditoria(resultado_final, id_consulta, data_hora_consulta)
+                    payload = self._executar_fluxo(context, page)
+                    return self._com_auditoria(payload, id_consulta, data_hora_consulta)
 
                 except Exception as e:
                     log_event(logger, logging.ERROR, "erro_execucao_bot", erro=str(e))
