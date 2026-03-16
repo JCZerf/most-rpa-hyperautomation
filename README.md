@@ -7,6 +7,12 @@ Principais modos de uso:
 - **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
 - **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
+## Links rapidos
+```text
+API (Swagger): https://most-rpa-hyperautomation-2k5peguzzq-ue.a.run.app/api/docs/
+Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
+```
+
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
 - Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
