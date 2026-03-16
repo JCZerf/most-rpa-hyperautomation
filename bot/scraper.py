@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
 from playwright.sync_api import sync_playwright
 
+from bot.identity import get_random_profile
+
 from .browser import create_browser_context
 from .navigation import perform_search
 from .extraction import extract_personal_info, extract_benefits
@@ -15,12 +17,6 @@ from .validators import classificar_consulta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-)
-
 
 class TransparencyBot:
     def __init__(self, headless: bool = True, alvo: Optional[str] = None, usar_refine: bool = False):
@@ -178,13 +174,15 @@ class TransparencyBot:
                 return self._com_auditoria(erro_validacao, id_consulta, data_hora_consulta)
 
             with sync_playwright() as pw:
+                perfil_escolhido = get_random_profile()
+                log_event(logger, logging.INFO, "perfil_carregado", nome_perfil=perfil_escolhido["name"])
                 browser, context, page = create_browser_context(
                     pw,
                     headless=self.headless,
-                    user_agent=os.getenv("PLAYWRIGHT_USER_AGENT", DEFAULT_USER_AGENT).strip() or DEFAULT_USER_AGENT,
-                    viewport={"width": 1280, "height": 720},
-                    locale="pt-BR",
-                    timezone_id="America/Sao_Paulo",
+                    user_agent=perfil_escolhido["user_agent"],
+                    viewport=perfil_escolhido["viewport"],
+                    locale=perfil_escolhido["locale"],
+                    timezone_id=perfil_escolhido["timezone_id"],
                 )
 
                 try:

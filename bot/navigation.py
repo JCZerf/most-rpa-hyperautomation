@@ -2,6 +2,7 @@ import logging
 import datetime
 import base64
 import re
+import time
 import unicodedata
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Tuple
@@ -85,16 +86,17 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
 
     input_busca = page.get_by_role("searchbox", name="Busque por Nome, Nis ou CPF (")
     _executar_etapa("focar_campo_busca", lambda: input_busca.click())
-    _executar_etapa("preencher_busca", lambda: input_busca.fill(alvo))
+    _executar_etapa("preencher_busca", lambda: input_busca.press_sequentially(alvo, delay=100))
+    # time.sleep(0.5)  # Pequena pausa para evitar que a digitação rápida seja ignorada pelo site
 
     if usar_refine:
         log_event(logger, logging.INFO, "fluxo_refinado")
         refine_button = page.get_by_role("button", name="Refine a Busca")
         def abrir_refine_busca():
             try:
-                refine_button.click(timeout=5000)
+                refine_button.click(timeout=3000)
             except Exception:
-                refine_button.click(force=True, timeout=5000)
+                refine_button.click(force=True, timeout=3000)
 
         _executar_etapa("abrir_refine_busca", abrir_refine_busca)
 
@@ -115,7 +117,6 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
                             el.dispatchEvent(new Event('change', { bubbles: true }));
                         }""",
                     )
-
         _executar_etapa("marcar_filtro_beneficiario", marcar_filtro_beneficiario)
         _executar_etapa("executar_consulta_refinada", lambda: page.locator("#btnConsultarPF").click())
     else:

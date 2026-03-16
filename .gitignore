@@ -18,6 +18,8 @@ venv/
 ENV/
 env/
 
+transparencia-index/
+
 # Installer logs
 pip-log.txt
 
