@@ -1,8 +1,8 @@
 name: Build and Deploy to Cloud Run
 on:
   push:
-    branches: [develop]        # automático na develop
-  workflow_dispatch: {}        # botão manual; branch é escolhida no UI
+    tags: ['v*']               # automático apenas em tags de versão (ex.: v1.0.0)
+  workflow_dispatch: {}        # execução manual (branch/tag escolhida no UI)
 env:
   PROJECT_ID: most-rpa-hyperautomation-homo
   REGION: us-east1

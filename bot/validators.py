@@ -51,6 +51,7 @@ def classificar_consulta(valor: str) -> Tuple[bool, ConsultaTipo | None, str, st
     if not valor_str:
         return False, None, "", "Consulta vazia"
 
+    valor_digitos = re.sub(r"\D", "", valor_str)
     somente_digitos = valor_str.isdigit()
     tem_letras = bool(re.search(r"[A-Za-zÀ-ÿ]", valor_str))
 
@@ -58,14 +59,15 @@ def classificar_consulta(valor: str) -> Tuple[bool, ConsultaTipo | None, str, st
     if somente_digitos and tem_letras:
         return False, None, valor_str, "Consulta mista (letras e dígitos) não é permitida"
 
-    if somente_digitos:
-        if len(valor_str) != 11:
-            return False, None, valor_str, "Número deve ter 11 dígitos para CPF/NIS"
-        if _valida_cpf(valor_str):
-            return True, "cpf", valor_str, ""
-        if _valida_nis(valor_str):
-            return True, "nis", valor_str, ""
-        return False, None, valor_str, "Dígitos inválidos para CPF/NIS"
+    # Permite CPF/NIS com pontuação e valida em cima da versão normalizada.
+    if valor_digitos and not tem_letras:
+        if len(valor_digitos) != 11:
+            return False, None, valor_digitos, "Número deve ter 11 dígitos para CPF/NIS"
+        if _valida_cpf(valor_digitos):
+            return True, "cpf", valor_digitos, ""
+        if _valida_nis(valor_digitos):
+            return True, "nis", valor_digitos, ""
+        return False, None, valor_digitos, "Dígitos inválidos para CPF/NIS"
 
     if tem_letras:
         # Nome: letras, espaços, ponto, hífen e apóstrofos/acentos simples
@@ -78,10 +80,6 @@ def classificar_consulta(valor: str) -> Tuple[bool, ConsultaTipo | None, str, st
 
 
 def mascarar_identificador(valor: str) -> str:
-    """
-    Aplica máscara simples: mantém 3 primeiros e 3 últimos caracteres quando possível.
-    Para strings curtas, devolve "***".
-    """
     if not valor:
         return "***"
     if len(valor) <= 6:

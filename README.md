@@ -12,6 +12,13 @@ Principais modos de uso:
 - Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
 - Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
 - `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
+- GitHub Actions para integração contínua (testes/smoke) e entrega contínua controlada no Cloud Run.
+
+## Integração contínua e entrega
+- **CI (integração contínua):** workflows no GitHub Actions para validações e smoke test (`.github/workflows/e2e-smoke.yml`).
+- **CD (deploy):** workflow de build/deploy no Cloud Run (`.github/workflows/google-cloudrun-docker.yml`).
+- **Política de gatilho do deploy:** execução **manual** (`workflow_dispatch`) ou **automática apenas por tag de versão** (`push tags: v*`).
+- **Sem deploy automático por commit/merge em branch**.
 
 ## Estrutura do projeto
 ```text
@@ -19,14 +26,18 @@ most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
+├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
+├── output/                   # Resultados JSON gerados nas execuções locais
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
+├── example.env               # Template de variáveis de ambiente
 ├── main.py                   # Runner local para execuções em lote
 ├── manage.py                 # Comando de gerenciamento Django
 ├── requirements.txt          # Dependências Python
-└── README.md                 # Guia de uso e operação
+├── README.md                 # Guia de uso e operação
+└── logs/                     # Logs locais por execução do runner (gerado em runtime)
 ```
 
 ## Fluxo da API
@@ -87,7 +98,6 @@ Payloads aceitos:
 - **Consulta única**: `{"consulta": "04031769644", "refinar_busca": false}`
 - **Lote simples**: `{"consultas": ["04031769644", "12345678901"], "refinar_busca": false}` (máx. 3 entradas)
 - **Lote avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": false}]}` (máx. 3 itens; `refinar_busca` padrão = false)
-- **Compatibilidade**: o campo legado `refine` continua aceito.
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
@@ -110,13 +120,14 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 ```json
 {
   "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-  "data_hora_consulta": "14/03/2026 10:30",
+  "data_hora_consulta": "14/03/2026 - 10:30",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "NOME DA PESSOA",
     "cpf": "***.***.***-**",
     "localidade": "UF",
-    "quantidade_beneficios": 1
+    "quantidade_beneficios": 1,
+    "total_recursos_favorecidos": "R$ 600,00"
   },
   "beneficios": [
     {
@@ -139,12 +150,14 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
   ],
   "meta": {
     "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-    "data_hora_consulta": "14/03/2026 10:30",
+    "data_hora_consulta": "14/03/2026 - 10:30",
     "resultados_encontrados": 1,
     "beneficios_encontrados": [
       "Auxílio Brasil"
     ],
-    "panorama_relacao": "<base64>"
+    "panorama_relacao": "<base64>",
+    "total_valor_recebido": 600.0,
+    "total_valor_recebido_formatado": "R$ 600,00"
   }
 }
 ```
@@ -153,55 +166,29 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 ```json
 {
   "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-  "data_hora_consulta": "14/03/2026 10:31",
+  "data_hora_consulta": "14/03/2026 - 10:31",
   "status": "error",
   "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "N/A",
     "cpf": "N/A",
-    "localidade": "N/A"
+    "localidade": "N/A",
+    "total_recursos_favorecidos": "R$ 0,00"
   },
   "beneficios": [],
   "meta": {
     "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-    "data_hora_consulta": "14/03/2026 10:31",
+    "data_hora_consulta": "14/03/2026 - 10:31",
     "resultados_encontrados": 0,
     "evidencia_resultados_zero": "<base64>",
-    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado"
+    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
+    "total_valor_recebido": 0.0,
+    "total_valor_recebido_formatado": "R$ 0,00"
   }
 }
 ```
-
-#### 3) Consulta bloqueada por proteção do portal (`200 OK` com bloqueio operacional)
-```json
-{
-  "status": "blocked",
-  "error": "Bloqueio temporário detectado pelo WAF do portal",
-  "pessoa": {
-    "consulta": "NOME COMPLETO",
-    "nome": "N/A",
-    "cpf": "N/A",
-    "localidade": "N/A"
-  },
-  "beneficios": [],
-  "meta": {
-    "resultados_encontrados": 0,
-    "evidencia_resultados_zero": "<base64>",
-    "data_consulta": "15/03/2026",
-    "hora_consulta": "00:44",
-    "data_hora_consulta": "15/03/2026 00:44",
-    "mensagem": "Bloqueio temporário detectado pelo WAF do portal",
-    "bloqueio_detectado": true,
-    "next_interval_ms": 10000,
-    "detected_by": [
-      "telemetry_next_interval"
-    ]
-  }
-}
-```
-
-#### 4) Lote (`200 OK`)
+#### 3) Lote (`200 OK`)
 ```json
 {
   "resultados": [
@@ -210,7 +197,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
       "status": "ok",
       "resultado": {
         "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-        "data_hora_consulta": "14/03/2026 10:30",
+        "data_hora_consulta": "14/03/2026 - 10:30",
         "pessoa": {
           "consulta": "04031769644",
           "nome": "NOME DA PESSOA",
@@ -220,35 +207,34 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
         "beneficios": [],
         "meta": {
           "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-          "data_hora_consulta": "14/03/2026 10:30"
+          "data_hora_consulta": "14/03/2026 - 10:30"
         }
       }
     },
     {
-      "consulta": "NOME INEXISTENTE",
+      "consulta": "123ABC",
       "status": "invalid",
       "resultado": {
         "status": "invalid",
-        "error": "...",
+        "error": "Entrada inválida: use CPF/NIS com 11 dígitos ou nome válido.",
         "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-        "data_hora_consulta": "14/03/2026 10:32",
+        "data_hora_consulta": "14/03/2026 - 10:32",
         "pessoa": {
-          "consulta": "NOME INEXISTENTE",
+          "consulta": "123ABC",
           "nome": "N/A",
           "cpf": "N/A",
           "localidade": "N/A"
         },
         "meta": {
           "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-          "data_hora_consulta": "14/03/2026 10:32"
+          "data_hora_consulta": "14/03/2026 - 10:32"
         }
       }
     }
   ]
 }
 ```
-
-#### 5) Erros de protocolo/segurança
+#### 4) Erros de protocolo/segurança
 
 | HTTP | Quando acontece | Exemplo |
 |------|------------------|---------|
@@ -267,14 +253,68 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 ## Parâmetros importantes
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
-- Na API, prefira o campo `refinar_busca`; `refine` é mantido apenas por compatibilidade.
+- Na API, use apenas o campo `refinar_busca`.
 - Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
+- Browser/Playwright via `.env`:
+  - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
+  - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
+  - `PLAYWRIGHT_USE_STEALTH_FLAGS`: habilita `--disable-blink-features=AutomationControlled`.
+  - `PLAYWRIGHT_HIDE_WEBDRIVER`: aplica override de `navigator.webdriver`.
+  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`Stealth().apply_stealth_sync(page)`).
+  - `PLAYWRIGHT_USER_AGENT`: user-agent customizado; se vazio, usa o default do projeto.
+  - `PLAYWRIGHT_SLOW_MO_MS`: delay entre ações (ms), útil para depuração e estabilidade.
+
+<a id="env-reference"></a>
+## Referência de variáveis de ambiente
+
+### API e segurança
+| Variável | Obrigatória | Valor padrão | Função |
+|---|---|---|---|
+| `DJANGO_SECRET_KEY` | Sim | - | Segredo interno do Django (assinatura de sessão e componentes de segurança). |
+| `API_MASTER_KEY` | Sim | - | Chave usada para assinar/validar JWT HS256 no fluxo de autenticação. |
+| `ALLOWED_HOSTS` | Sim (produção) | `127.0.0.1,localhost` | Define hosts/domínios permitidos pelo Django. |
+| `DEBUG` | Não | `False` | Liga/desliga modo de depuração do Django. |
+| `API_TOKEN_TTL` | Não | `600` | Tempo de vida do token OAuth (`/api/token/`), em segundos. |
+| `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
+| `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
+| `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
+| `BOT_MAX_WORKERS` | Não | `1` | Número máximo de workers no batch da API (`/api/consulta/`). |
+
+### Browser e Playwright
+| Variável | Obrigatória | Valor padrão | Função |
+|---|---|---|---|
+| `PLAYWRIGHT_CHANNEL` | Não | `chromium` | Canal do navegador: `chromium` ou `chrome`. |
+| `PLAYWRIGHT_STORAGE_STATE_PATH` | Não | vazio | Reutiliza sessão/cookies de um `storage_state.json`. |
+| `PLAYWRIGHT_USE_STEALTH_FLAGS` | Não | `true` | Adiciona flags anti-automação no launch do browser. |
+| `PLAYWRIGHT_HIDE_WEBDRIVER` | Não | `true` | Oculta `navigator.webdriver` via script de inicialização. |
+| `PLAYWRIGHT_USE_STEALTH_PACKAGE` | Não | `true` | Aplica `playwright-stealth` na página (quando instalado). |
+| `PLAYWRIGHT_USER_AGENT` | Não | UA padrão do projeto | Define User-Agent customizado para contexto do browser. |
+| `PLAYWRIGHT_SLOW_MO_MS` | Não | `0` | Delay entre ações do Playwright (ms), útil para debug/estabilidade. |
+
 
 ## Testes
+
+### Testes locais rápidos (sem ambiente externo)
+```bash
+pytest -q -m "not e2e"
+```
+
+Cobertura principal desse bloco:
+- `tests/test_validators.py`: validação de CPF/NIS/nome.
+- `tests/test_navigation.py`: score de nome e escolha do resultado mais próximo.
+- `tests/test_extraction_parsers.py`: parsing de layouts de tabela de detalhe (recebidos/disponibilizado/sacados/fallback).
+- `tests/test_bot.py`: contrato de saída do bot (`N/A`, `id_consulta`, `data_hora_consulta`, erros e evidências).
+- `tests/test_browser_env.py`: leitura de envs do Playwright/browser.
+- `tests/test_main.py`: runner local (`main.py`), duração e comportamento de execução.
+- `tests/test_utils.py`: conversão/formatacão monetária (`valor_texto_para_float`, `formatar_brl`).
+- `tests/test_api_token.py`: geração e validação básica de token.
+- `tests/test_api_consulta.py`: endpoint `/api/consulta` (single/lote), autenticação, limites e erros.
+
+### Rodar toda a suíte (inclui E2E se configurado)
 ```bash
 pytest
 ```
-Os testes unitários cobrem validação de entrada e endpoints (`/api/token/`, `/api/consulta/`) com mocks para evitar abrir o navegador.
+Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pytest -q -m "not e2e"`.
 
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
@@ -309,24 +349,31 @@ E2E_REQUIRE_SUCCESS=true \
 - Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
 - Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
 
+### Evidências de integrações externas
+- Google Sheets (registro da execução): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Google Drive (arquivo gerado): [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
+- Make (workflow/orquestração): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+
 ## Estrutura de saída (resumo)
 - `id_consulta`: UUID da execução (sempre presente).
-- `data_hora_consulta`: timestamp único da consulta (`dd/mm/aaaa HH:MM`, sempre presente).
-- `pessoa`: `consulta`, `nome`, `cpf`, `localidade`, `quantidade_beneficios`… (campos básicos com `N/A` quando ausentes).
+- `data_hora_consulta`: timestamp único da consulta (`dd/mm/aaaa - HH:MM`, sempre presente).
+- `pessoa`: `consulta`, `nome`, `cpf`, `localidade`, `quantidade_beneficios`, `total_recursos_favorecidos`… (campos básicos com `N/A` quando ausentes).
 - `beneficios`: lista com `tipo`, `nis`, `valor_recebido`, `detalhe_href`, `detalhe_evidencia` (Base64), `parcelas` (itens das tabelas de detalhe).
-- `meta`: inclui também `id_consulta` e `data_hora_consulta` para auditoria, além de `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64) e evidências.
+- `meta`: inclui também `id_consulta`, `data_hora_consulta`, `total_valor_recebido`, `total_valor_recebido_formatado`, além de `resultados_encontrados`, `beneficios_encontrados`, `panorama_relacao` (Base64) e evidências.
 
 ## Boas práticas e troubleshooting
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
+- Se usar `PLAYWRIGHT_CHANNEL=chrome`, instale o Chrome no ambiente ou rode `playwright install chrome`.
+- Se usar `PLAYWRIGHT_USE_STEALTH_PACKAGE=true`, instale a dependência: `pip install playwright-stealth`.
 - Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
-- O Portal da Transparência pode acionar AWS WAF (challenge/telemetry). Nesse caso, a API retorna `status="blocked"` em vez de confundir com `0 resultados`.
-- Logs em `bot_execution.log` (runner) e via logging Django no endpoint.
+- O Portal da Transparência pode acionar challenge/telemetria. Atualmente o projeto não classifica automaticamente como `status="blocked"` para evitar falso positivo.
+- Logs do runner local em `logs/execucao_<timestamp>.log` e logs da API via Django/Cloud Logging.
 
 ## Segurança
-Uso apenas para fins legais; trate dados pessoais conforme LGPD. Armazene resultados de forma transitória ou conforme política interna.
-- Não versione segredos reais no repositório. Use `example.env` como referência, mantenha `.env` fora do Git e injete credenciais via secrets do ambiente (ex.: GitHub Secrets/Cloud Run).
-- A aplicação não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta da API.
-- Evidências em Base64 são tratadas como transitórias; artefatos de homologação/documentação existem apenas para fins de validação técnica do desafio.
+Uso apenas para fins legais; trate dados pessoais conforme LGPD.
+- A API não persiste consultas em banco de dados: processa em memória e retorna o resultado na resposta.
+- No fluxo externo de hiperautomação (Make -> Google Drive/Google Sheets), há persistência de artefatos/dados; aplique política de retenção/expurgo, controle de acesso e minimização de dados.
+- Evidências em Base64 são transitórias no fluxo da API, mas podem ser armazenadas externamente quando integrações estiverem habilitadas.
 
 ## Cenários de teste do desafio
 Os cenários fornecidos pela MOST estão documentados em `doc/02-requisito-do-projeto.md` (seção “Cenários de teste”). A suíte `pytest` cobre os casos de sucesso/erro por CPF/NIS e Nome, além de cenário com parcelas e evidências.

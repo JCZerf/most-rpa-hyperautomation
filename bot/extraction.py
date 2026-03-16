@@ -1,8 +1,11 @@
 import logging
 import datetime
 import base64
+import unicodedata
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
+from .logging_utils import log_event
+from .utils import valor_texto_para_float, formatar_brl
 
 logger = logging.getLogger(__name__)
 
@@ -14,35 +17,170 @@ def extract_personal_info(page: Any) -> Dict[str, str]:
     return {"nome": nome, "cpf": cpf, "localidade": localidade}
 
 
+def _agora_brt() -> Dict[str, str]:
+    agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
+    return {"data_consulta": agora.strftime("%d/%m/%Y"), "hora_consulta": agora.strftime("%H:%M")}
+
+
+def _detectar_beneficios_painel(page: Any) -> List[str]:
+    beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
+    encontrados: List[str] = []
+    for beneficio in beneficios_possiveis:
+        if page.locator(f"strong:has-text('{beneficio}')").count() > 0:
+            encontrados.append(beneficio)
+    return encontrados
+
+
+def _extrair_textos_cols(cols: Any) -> List[str]:
+    return [cols.nth(ci).inner_text().strip() for ci in range(cols.count())]
+
+
+def _parse_linha_valores_recebidos(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 6:
+        return None
+    return {
+        "mes_folha": valores[0],
+        "mes_referencia": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "quantidade_dependentes": valores[4],
+        "valor": valores[5],
+    }
+
+
+def _parse_linha_disponibilizado(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 7:
+        return None
+    return {
+        "mes_disponibilizacao": valores[0],
+        "parcela": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "enquadramento": valores[4],
+        "valor": valores[5],
+        "observacao": valores[6],
+    }
+
+
+def _parse_linha_valores_sacados(valores: List[str]) -> Dict[str, str] | None:
+    if len(valores) < 5:
+        return None
+    return {
+        "mes_folha": valores[0],
+        "mes_referencia": valores[1],
+        "uf": valores[2],
+        "municipio": valores[3],
+        "valor_parcela": valores[4],
+    }
+
+
+def _parse_linha_generica(valores: List[str]) -> Dict[str, str] | None:
+    if not valores:
+        return None
+    return {f"col_{idx}": val for idx, val in enumerate(valores)}
+
+
+def _coletar_linhas_tabela(tabela: Any, nova_pagina: Any, parser) -> List[Dict[str, str]]:
+    detalhes: List[Dict[str, str]] = []
+    tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
+    nova_pagina.wait_for_timeout(300)
+    linhas = tabela.locator("tbody tr")
+    for r in range(linhas.count()):
+        cols = linhas.nth(r).locator("td")
+        valores = _extrair_textos_cols(cols)
+        parsed = parser(valores)
+        if parsed:
+            detalhes.append(parsed)
+    return detalhes
+
+
+def _encontrar_tabela_fallback(nova_pagina: Any) -> Any | None:
+    if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+        return nova_pagina.locator("table#tabelaDetalheDisponibilizado")
+
+    tables = nova_pagina.locator("table")
+    for ti in range(tables.count()):
+        tabela = tables.nth(ti)
+        if tabela.locator("tbody tr").count() > 0:
+            return tabela
+    return None
+
+
+def _coletar_detalhe_parcelas(nova_pagina: Any) -> List[Dict[str, str]]:
+    try:
+        if nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheValoresRecebidos")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_recebidos)
+
+        if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_disponibilizado)
+
+        if nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
+            tabela = nova_pagina.locator("table#tabelaDetalheValoresSacados")
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_sacados)
+
+        tabela = _encontrar_tabela_fallback(nova_pagina)
+        if tabela:
+            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_generica)
+    except Exception:
+        return []
+    return []
+
+
+def _detectar_verificacao_humana(nova_pagina: Any) -> bool:
+    def _normalizar(texto: str) -> str:
+        base = unicodedata.normalize("NFD", texto or "")
+        base = "".join(ch for ch in base if unicodedata.category(ch) != "Mn")
+        return base.lower()
+
+    try:
+        titulo = _normalizar(nova_pagina.title() or "")
+    except Exception:
+        titulo = ""
+
+    try:
+        corpo = _normalizar(nova_pagina.inner_text("body", timeout=2000) or "")
+    except Exception:
+        corpo = ""
+
+    sinais = [
+        "human verification",
+        "vamos confirmar que voce e humano",
+        "conclua a verificacao de seguranca antes de continuar",
+        "essa etapa verifica se voce nao e um bot",
+        "evitar spam",
+        "iniciar",
+    ]
+    texto = f"{titulo}\n{corpo}"
+    return any(s in texto for s in sinais)
+
+
 def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     # Captura panorama
     panorama_bytes = page.screenshot(full_page=True)
     panorama_base64 = base64.b64encode(panorama_bytes).decode("utf-8")
-    logger.info("Panorama capturado em base64.")
+    log_event(logger, logging.INFO, "panorama_capturado")
 
-    beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
-    beneficios_encontrados: List[str] = []
-    for b in beneficios_possiveis:
-        if page.locator(f"strong:has-text('{b}')").count() > 0:
-            beneficios_encontrados.append(b)
+    beneficios_encontrados = _detectar_beneficios_painel(page)
 
     # log resumo inicial de benefícios detectados
-    logger.info(f"Benefícios detectados no painel: {beneficios_encontrados}")
+    log_event(logger, logging.INFO, "beneficios_detectados_painel", beneficios=beneficios_encontrados)
 
     if not beneficios_encontrados:
-        agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
-        data_consulta = agora.strftime("%d/%m/%Y")
-        hora_consulta = agora.strftime("%H:%M")
+        ts = _agora_brt()
         return {
             "beneficios_encontrados": beneficios_encontrados,
             "panorama_base64": panorama_base64,
+            "total_valor_recebido": 0.0,
+            "total_valor_recebido_formatado": formatar_brl(0.0),
             "resultado": {
                 "beneficios": [],
                 "meta": {
                     "beneficios_encontrados": beneficios_encontrados,
                     "evidencia_sem_beneficio": panorama_base64,
-                    "data_consulta": data_consulta,
-                    "hora_consulta": hora_consulta,
+                    "data_consulta": ts["data_consulta"],
+                    "hora_consulta": ts["hora_consulta"],
                 },
             },
         }
@@ -50,7 +188,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
     beneficios_resultado: List[Dict[str, Any]] = []
     blocos = page.locator("#accordion-recebimentos-recursos .br-table")
     total_blocos = blocos.count()
-    logger.info(f"Iniciando extração de {total_blocos} blocos de benefícios.")
+    log_event(logger, logging.INFO, "inicio_extracao_beneficios", total_blocos=total_blocos)
     for i in range(total_blocos):
         bloco = blocos.nth(i)
         try:
@@ -58,7 +196,7 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
         except Exception:
             tipo = bloco.inner_text().strip().split('\n', 1)[0][:50]
 
-        logger.info(f"Extraindo benefício {i+1}/{total_blocos}: {tipo}")
+        log_event(logger, logging.INFO, "extraindo_beneficio", indice=i + 1, total=total_blocos, tipo=tipo)
 
         try:
             cols = bloco.locator("table tbody tr td")
@@ -76,6 +214,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
 
         detalhe_parcelas: List[Dict[str, str]] = []
         detalhe_evidence_b64 = None
+        detalhe_status = "ok"
+        detalhe_mensagem = None
 
         if href:
             try:
@@ -88,91 +228,37 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-                try:
-                    if nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheValoresRecebidos")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 6:
-                                detalhe_parcelas.append({
-                                    "mes_folha": cols.nth(0).inner_text().strip(),
-                                    "mes_referencia": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "quantidade_dependentes": cols.nth(4).inner_text().strip(),
-                                    "valor": cols.nth(5).inner_text().strip(),
-                                })
-                    elif nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 7:
-                                detalhe_parcelas.append({
-                                    "mes_disponibilizacao": cols.nth(0).inner_text().strip(),
-                                    "parcela": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "enquadramento": cols.nth(4).inner_text().strip(),
-                                    "valor": cols.nth(5).inner_text().strip(),
-                                    "observacao": cols.nth(6).inner_text().strip(),
-                                })
-                    elif nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
-                        tabela = nova_pagina.locator("table#tabelaDetalheValoresSacados")
-                        tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                        nova_pagina.wait_for_timeout(300)
-                        linhas = tabela.locator("tbody tr")
-                        for r in range(linhas.count()):
-                            cols = linhas.nth(r).locator("td")
-                            if cols.count() >= 5:
-                                detalhe_parcelas.append({
-                                    "mes_folha": cols.nth(0).inner_text().strip(),
-                                    "mes_referencia": cols.nth(1).inner_text().strip(),
-                                    "uf": cols.nth(2).inner_text().strip(),
-                                    "municipio": cols.nth(3).inner_text().strip(),
-                                    "valor_parcela": cols.nth(4).inner_text().strip(),
-                                })
-                    else:
-                        tabela = None
-                        if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
-                            tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
-                        else:
-                            tables = nova_pagina.locator("table")
-                            for ti in range(tables.count()):
-                                if tables.nth(ti).locator("tbody tr").count() > 0:
-                                    tabela = tables.nth(ti)
-                                    break
-                        if tabela:
-                            tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-                            nova_pagina.wait_for_timeout(300)
-                            linhas = tabela.locator("tbody tr")
-                            for r in range(linhas.count()):
-                                cols = linhas.nth(r).locator("td")
-                                if cols.count() >= 1:
-                                    row = [cols.nth(ci).inner_text().strip() for ci in range(cols.count())]
-                                    detalhe_parcelas.append({f"col_{idx}": val for idx, val in enumerate(row)})
-                except Exception:
-                    detalhe_parcelas = []
 
-                try:
-                    bytes_det = nova_pagina.screenshot(full_page=True)
-                    detalhe_evidence_b64 = base64.b64encode(bytes_det).decode("utf-8")
-                except Exception:
-                    detalhe_evidence_b64 = None
+                if _detectar_verificacao_humana(nova_pagina):
+                    detalhe_status = "human_verification"
+                    detalhe_mensagem = (
+                        "Vamos confirmar que você é humano. Conclua a verificação de segurança antes de continuar."
+                    )
+                    log_event(
+                        logger,
+                        logging.WARNING,
+                        "verificacao_humana_detectada_detalhe",
+                        tipo=tipo,
+                        detalhe_url=detalhe_url,
+                    )
+                else:
+                    detalhe_parcelas = _coletar_detalhe_parcelas(nova_pagina)
 
-                logger.info(f"Finalizado detalhe para {tipo}: {len(detalhe_parcelas)} parcelas extraídas")
+                if detalhe_status == "ok":
+                    try:
+                        bytes_det = nova_pagina.screenshot(full_page=True)
+                        detalhe_evidence_b64 = base64.b64encode(bytes_det).decode("utf-8")
+                    except Exception:
+                        detalhe_evidence_b64 = None
+
+                log_event(logger, logging.INFO, "detalhe_beneficio_finalizado", tipo=tipo, parcelas=len(detalhe_parcelas))
 
                 try:
                     nova_pagina.close()
                 except Exception:
                     pass
             except Exception as e:
-                logger.warning(f"Falha ao abrir detalhe para {tipo}: {e}")
+                log_event(logger, logging.WARNING, "falha_abrir_detalhe_beneficio", tipo=tipo, erro=str(e))
 
         beneficios_resultado.append({
             "tipo": tipo,
@@ -180,20 +266,23 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
             "valor_recebido": valor_recebido,
             "detalhe_href": href,
             "detalhe_evidencia": detalhe_evidence_b64,
+            "detalhe_status": detalhe_status,
+            "detalhe_mensagem": detalhe_mensagem,
             "parcelas": detalhe_parcelas,
         })
 
-    agora = datetime.datetime.now(tz=ZoneInfo("America/Sao_Paulo"))
-    data_consulta = agora.strftime("%d/%m/%Y")
-    hora_consulta = agora.strftime("%H:%M")
+    ts = _agora_brt()
 
     quantidade_beneficios = len(beneficios_resultado)
+    total_valor_recebido = sum(valor_texto_para_float(b.get("valor_recebido", "")) for b in beneficios_resultado)
 
     return {
         "beneficios_resultado": beneficios_resultado,
         "beneficios_encontrados": beneficios_encontrados,
         "quantidade_beneficios": quantidade_beneficios,
+        "total_valor_recebido": total_valor_recebido,
+        "total_valor_recebido_formatado": formatar_brl(total_valor_recebido),
         "panorama_base64": panorama_base64,
-        "data_consulta": data_consulta,
-        "hora_consulta": hora_consulta,
+        "data_consulta": ts["data_consulta"],
+        "hora_consulta": ts["hora_consulta"],
     }

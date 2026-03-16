@@ -11,13 +11,17 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, inline_serializ
 from drf_spectacular.types import OpenApiTypes
 
 from bot.scraper import TransparencyBot
+from bot.logging_utils import log_event
 from bot.validators import mascarar_identificador
 from .auth import issue_token, validate_token, scope_allows
 
 logger = logging.getLogger(__name__)
 
 MAX_BATCH = 3
-MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+try:
+    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+except (TypeError, ValueError):
+    MAX_WORKERS = 1
 
 
 class ItemConsultaSerializer(serializers.Serializer):
@@ -30,10 +34,21 @@ class ItemConsultaSerializer(serializers.Serializer):
 
 
 def _resolve_refine_flag(payload: Dict[str, Any], default: bool = False) -> bool:
-    # Campo preferencial em português. Mantemos 'refine' por compatibilidade retroativa.
-    if "refinar_busca" in payload:
-        return bool(payload.get("refinar_busca"))
-    return bool(payload.get("refine", default))
+    raw = payload.get("refinar_busca", default)
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return default
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in {"1", "true", "yes", "on"}:
+            return True
+        if v in {"0", "false", "no", "off", ""}:
+            return False
+        return default
+    return bool(raw)
 
 
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
@@ -64,7 +79,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
         "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
-        "Compatibilidade: o campo legado 'refine' continua aceito.\n"
         "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
         "em todas as execuções para auditoria.\n"
         "Quando não houver dados cadastrais, `pessoa.nome`, `pessoa.cpf` e `pessoa.localidade` retornam `N/A`."
@@ -85,12 +99,6 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         OpenApiExample(
             "Lote avançado",
             value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": False}]},
-            request_only=True,
-            media_type='application/json',
-        ),
-        OpenApiExample(
-            "Compatibilidade (legado)",
-            value={"consulta": "04031769644", "refine": True},
             request_only=True,
             media_type='application/json',
         ),
@@ -161,17 +169,12 @@ def _status_from_result(res: Dict[str, Any]) -> str:
                 default=False,
                 help_text="Ativa o filtro 'Beneficiário de Programa Social'.",
             ),
-            "refine": serializers.BooleanField(
-                required=False,
-                help_text="Campo legado aceito por compatibilidade.",
-            ),
         },
     ),
     responses=OpenApiTypes.OBJECT,
 )
 @api_view(['POST'])
 def consulta(request: Request):
-    # Auth: exige Bearer token emitido pelo endpoint /api/token/
     auth_header = request.headers.get("Authorization") or ""
     if not auth_header.startswith("Bearer "):
         return JsonResponse({"status": "error", "error": "Missing bearer token"}, status=401)
@@ -182,13 +185,7 @@ def consulta(request: Request):
     if not scope_allows(claims, ["bot:read"]):
         return JsonResponse({"status": "error", "error": "Insufficient scope"}, status=403)
 
-    # request is a DRF Request; use request.data for parsed JSON
     payload = request.data if isinstance(request.data, dict) else {}
-
-    # Detect batch formats
-    # 1) { "consultas": ["cpf1","cpf2"], "refine": false }
-    # 2) { "itens": [{"consulta": "cpf", "refine": true}, ...] }
-    # 3) Single: { "consulta": "cpf", "refine": false }
 
     resultados: List[Dict[str, Any]] = []
 
@@ -199,10 +196,12 @@ def consulta(request: Request):
             return _json_error('Lista "consultas" vazia', 400)
         if len(consultas) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} consultas por requisição", 400)
-        logger.info(
-            "API chamada (batch consultas): %s refine_default=%s",
-            [mascarar_identificador(str(c)) for c in consultas],
-            refine_default,
+        log_event(
+            logger,
+            logging.INFO,
+            "api_batch_consultas_recebida",
+            consultas=[mascarar_identificador(str(c)) for c in consultas],
+            refine_default=refine_default,
         )
         workers = min(MAX_WORKERS, len(consultas))
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -214,6 +213,14 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "api_batch_item_processado",
+                        consulta=mascarar_identificador(str(c)),
+                        status=status_item,
+                        id_consulta=res.get("id_consulta", "-"),
+                    )
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando consulta %s", c)
@@ -227,36 +234,40 @@ def consulta(request: Request):
             return _json_error('Lista "itens" vazia', 400)
         if len(itens) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} itens por requisição", 400)
-        logger.info(
-            "API chamada (itens): %s",
-            [mascarar_identificador(str(i.get('consulta') or i.get('alvo'))) for i in itens],
+        log_event(
+            logger,
+            logging.INFO,
+            "api_batch_itens_recebida",
+            consultas=[mascarar_identificador(str(i.get('consulta') or i.get('alvo'))) for i in itens],
         )
         workers = min(MAX_WORKERS, len(itens))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {}
-            ordered_inputs = []
+            ordered_inputs = {}
+            resultados = [None] * len(itens)
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
-                refine = _resolve_refine_flag(item, default=False)
-                ordered_inputs.append((c, refine))
+                refinar_busca = _resolve_refine_flag(item, default=False)
                 if not c:
-                    resultados.append({"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'})
+                    resultados[idx] = {"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'}
                     continue
-                future_map[executor.submit(_run_single, c, refine)] = idx
-
-            # prefill results list preserving order
-            if resultados:
-                # results already has items for missing consulta; ensure length matches
-                resultados += [None] * (len(itens) - len(resultados))
-            else:
-                resultados = [None] * len(itens)
+                ordered_inputs[idx] = (c, refinar_busca)
+                future_map[executor.submit(_run_single, c, refinar_busca)] = idx
 
             for fut in as_completed(future_map):
                 idx = future_map[fut]
-                c, refine = ordered_inputs[idx]
+                c, _ = ordered_inputs[idx]
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "api_item_processado",
+                        consulta=mascarar_identificador(str(c)),
+                        status=status_item,
+                        id_consulta=res.get("id_consulta", "-"),
+                    )
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando item %s", c)
@@ -271,13 +282,23 @@ def consulta(request: Request):
     if consulta_param is None:
         return _json_error('Parâmetro "consulta" não informado', 400)
 
-    logger.info(
-        "API chamada: consulta=%s refine=%s",
-        mascarar_identificador(str(consulta_param)),
-        refine_param,
+    log_event(
+        logger,
+        logging.INFO,
+        "api_consulta_recebida",
+        consulta=mascarar_identificador(str(consulta_param)),
+        refinar_busca=refine_param,
     )
     try:
         resultado = _run_single(consulta_param, refine_param)
+        log_event(
+            logger,
+            logging.INFO,
+            "api_consulta_processada",
+            consulta=mascarar_identificador(str(consulta_param)),
+            status=_status_from_result(resultado),
+            id_consulta=resultado.get("id_consulta", "-"),
+        )
         if resultado.get("status") == "invalid":
             return JsonResponse(resultado, status=400, safe=False)
         return JsonResponse(resultado, safe=False)
@@ -345,6 +366,13 @@ def token(request: Request):
 
     if client_id != expected_id or client_secret != expected_secret:
         return _json_error("Credenciais do cliente inválidas", 401)
+
+    requested_scopes = str(scope or "").split()
+    allowed_scopes = {"bot:read"}
+    if not requested_scopes:
+        return _json_error('Parâmetro "scope" inválido', 400)
+    if not all(s in allowed_scopes for s in requested_scopes):
+        return _json_error('Parâmetro "scope" inválido', 400)
 
     ttl = getattr(dj_settings, "API_TOKEN_TTL", 600)
     token_value, exp = issue_token(client_id, ttl, scope, dj_settings.OAUTH_AUDIENCE)
