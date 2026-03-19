@@ -15,6 +15,7 @@
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
 - Limite de 3 entradas por requisição: **feito**. Execução paralela da API é configurável por `BOT_MAX_WORKERS` (padrão `3`; ajuste para `1` se precisar de mais estabilidade).
 - Execução simultânea de bots (requisito do desafio): **feito no código** (runner local e batch); paralelismo é ajustável por ambiente conforme estabilidade/capacidade.
+- Concorrência de requisições HTTP por instância: **configurável** via `GUNICORN_WORKERS` e `GUNICORN_THREADS` (padrão `1x2`, ou seja, até 2 requisições simultâneas por instância).
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
 - Mensagens de erro dos cenários de teste (MOST): **feito** para os cenários principais (CPF/NIS inexistente e nome sem resultado).
 - Segurança/LGPD: **feito** com mascaramento de identificadores nos logs, autenticação por token e uso de segredos via variáveis de ambiente.
