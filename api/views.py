@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 MAX_BATCH = 3
 try:
-    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "3")))
 except (TypeError, ValueError):
     MAX_WORKERS = 1
 
@@ -75,9 +75,10 @@ def _status_from_result(res: Dict[str, Any]) -> str:
     summary="Executa consulta no Portal da Transparência (única ou lote)",
     description=(
         "Suporta 3 formatos de payload:\n"
-        "- Consulta única: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
-        "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
-        "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
+        "- Consulta unitária simples: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
+        "- Consulta dupla simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
+        "- Consulta tripla simples: {\"consultas\":[\"...\",\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n\n"
+        "Também há exemplos avançados com refinar_busca=true (lote simples).\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
         "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
         "em todas as execuções para auditoria.\n"
@@ -85,20 +86,58 @@ def _status_from_result(res: Dict[str, Any]) -> str:
     ),
     examples=[
         OpenApiExample(
-            "Consulta única",
+            "Consulta unitária simples",
             value={"consulta": "04031769644", "refinar_busca": False},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Lote simples",
-            value={"consultas": ["04031769644", "12345678901"], "refinar_busca": True},
+            "Consulta dupla simples",
+            value={
+                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "refinar_busca": False,
+            },
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Lote avançado",
-            value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": False}]},
+            "Consulta tripla simples",
+            value={
+                "consultas": [
+                    "04031769644",
+                    "A ANNE CHRISTINE SILVA RIBEIRO",
+                    "A LIDA PEREIRA FIALHO",
+                ],
+                "refinar_busca": False,
+            },
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta unitária avançada",
+            value={"consulta": "04031769644", "refinar_busca": True},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta dupla avançada",
+            value={
+                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "refinar_busca": True,
+            },
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta tripla avançada",
+            value={
+                "consultas": [
+                    "04031769644",
+                    "A ANNE CHRISTINE SILVA RIBEIRO",
+                    "A LIDA PEREIRA FIALHO",
+                ],
+                "refinar_busca": True,
+            },
             request_only=True,
             media_type='application/json',
         ),

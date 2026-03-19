@@ -101,9 +101,12 @@ python manage.py runserver 8000
 `POST /api/consulta/`
 
 Payloads aceitos:
-- **Consulta única**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Lote simples**: `{"consultas": ["04031769644", "12345678901"], "refinar_busca": false}` (máx. 3 entradas)
-- **Lote avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": false}]}` (máx. 3 itens; `refinar_busca` padrão = false)
+- **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
+- **Consulta dupla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta tripla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
+- **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
+- **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
@@ -260,7 +263,7 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 - Na API, use apenas o campo `refinar_busca`.
-- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
+- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (padrão `3`; em produção, considere `1` se precisar de mais estabilidade do Chromium).
 - Browser/Playwright via `.env`:
   - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
   - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
@@ -284,7 +287,7 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
-| `BOT_MAX_WORKERS` | Não | `1` | Número máximo de workers no batch da API (`/api/consulta/`). |
+| `BOT_MAX_WORKERS` | Não | `3` | Número máximo de workers no batch da API (`/api/consulta/`). |
 
 ### Browser e Playwright
 | Variável | Obrigatória | Valor padrão | Função |

@@ -13,8 +13,8 @@
 - Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL): **feito**.
 - Integração contínua com GitHub Actions: **feito** (workflows versionados para validação/smoke).
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
-- Limite de 3 entradas por requisição: **feito**. Execução paralela da API está **intencionalmente limitada** por configuração de runtime para estabilidade.
-- Execução simultânea de bots (requisito do desafio): **feito no código** (runner local e batch); em produção, paralelismo está ajustado de forma conservadora para estabilidade.
+- Limite de 3 entradas por requisição: **feito**. Execução paralela da API é configurável por `BOT_MAX_WORKERS` (padrão `3`; ajuste para `1` se precisar de mais estabilidade).
+- Execução simultânea de bots (requisito do desafio): **feito no código** (runner local e batch); paralelismo é ajustável por ambiente conforme estabilidade/capacidade.
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
 - Mensagens de erro dos cenários de teste (MOST): **feito** para os cenários principais (CPF/NIS inexistente e nome sem resultado).
 - Segurança/LGPD: **feito** com mascaramento de identificadores nos logs, autenticação por token e uso de segredos via variáveis de ambiente.
