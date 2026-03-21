@@ -125,8 +125,12 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
             "clicar_lupa_busca",
             lambda: page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click(),
         )
-
-    _executar_etapa("aguardar_carregamento_resultados", lambda: page.wait_for_load_state("networkidle"))
+    try:
+        _executar_etapa("aguardar_carregamento_resultados", lambda: page.wait_for_load_state("networkidle", timeout=3000))
+    except Exception:
+        log_event(logger, logging.WARNING, "networkidle_timeout_ignorado", motivo="carregamento pode ser infinito, mas resultados já disponíveis")
+        pass
+    page.wait_for_timeout(500)
     contador_locator = page.locator("#countResultados")
     _executar_etapa("aguardar_contador_resultados", lambda: contador_locator.wait_for(state="visible", timeout=15000))
 
@@ -136,6 +140,35 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
     )
     quantidade_texto = contador_locator.inner_text().strip()
     quantidade = int(quantidade_texto.replace('.', '')) if quantidade_texto else 0
+    consulta_numerica = bool(alvo.strip()) and re.fullmatch(r"[\d.\-\/\s]+", alvo.strip()) is not None
+    # Fallback de rebusca: restrito ao fluxo simples (refinar_busca=false).
+    # Usado quando o contador vem exagerado para a entrada informada.
+    if (not usar_refine) and ((consulta_numerica and quantidade > 1) or (not consulta_numerica and quantidade > 1000)):
+        log_event(
+            logger,
+            logging.WARNING,
+            "fallback_fluxo_simples_rebusca_acionado",
+            consulta_numerica=consulta_numerica,
+            quantidade_inicial=quantidade,
+        )
+        _executar_etapa(
+            "clicar_lupa_busca_rebusca",
+            lambda: page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click(),
+        )
+        _executar_etapa("aguardar_carregamento_resultados_rebusca", lambda: page.wait_for_load_state("networkidle"))
+        _executar_etapa(
+            "aguardar_contador_preenchido_rebusca",
+            lambda: page.wait_for_function("document.querySelector('#countResultados').innerText.trim() !== ''"),
+        )
+        quantidade_texto_rebusca = contador_locator.inner_text().strip()
+        quantidade = int(quantidade_texto_rebusca.replace('.', '')) if quantidade_texto_rebusca else 0
+        log_event(
+            logger,
+            logging.INFO,
+            "fallback_fluxo_simples_rebusca_finalizado",
+            quantidade_apos_rebusca=quantidade,
+        )
+
     log_event(logger, logging.INFO, "resultados_encontrados", quantidade=quantidade)
 
     indice_escolhido = 0

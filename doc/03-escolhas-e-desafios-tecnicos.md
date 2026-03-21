@@ -18,6 +18,9 @@
 - **Card rotativo na home do portal:** dificultava o clique determinístico no fluxo inicial. Mitigação aplicada com clique forçado e sequência de navegação estabilizada.
 - **Sincronização de carregamento nas telas de detalhe:** sem espera adequada, a extração de parcelas podia quebrar. Mitigação com esperas explícitas de carregamento/estado antes de ler tabelas.
 - **Intermitência no modo refinado (`refinar_busca=true`):** o container de busca refinada podia permanecer oculto em alguns cenários. Mitigação com fallback de clique forçado e marcação do filtro via JavaScript.
+- **Busca simples por nome (`refinar_busca=false`) com timeout em `networkidle`:** a espera por `wait_for_load_state("networkidle")` podia ficar pendente e estourar timeout em consultas por nome.
+  - Sintoma: falha intermitente na etapa de carregamento mesmo com resultados já disponíveis no contador.
+  - Mitigação aplicada: tolerar timeout de `networkidle`, seguir com sincronização pelo `#countResultados` e validar seleção pelo nome mais próximo.
 - **CAPTCHA/WAF e bloqueios progressivos:** houve ocorrência de bloqueio tanto na API em nuvem quanto em máquina local após volume de consultas.
   - Hipótese técnica principal: combinação de telemetria comportamental, assinatura de automação e mecanismos anti-bot do portal.
   - Evidência empírica da fase de testes: cerca de 500 solicitações ao longo de aproximadamente 8 horas antes de bloqueio geral.
