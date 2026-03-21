@@ -12,7 +12,7 @@ Nos testes com Docker Compose, o valor efetivo pode vir de:
 Exemplo atual do projeto: `.env` possui `BOT_MAX_WORKERS=3`, portanto esse tende a ser o valor efetivo quando nao sobrescrito no comando.
 
 ## Escopo dos testes disponiveis (estado real)
-- Ambiente de execucao (ambos): container Docker com limite de **2 CPU** e **1 GB RAM**.
+- Ambiente de execucao (ambos): container Docker com limite de **3 CPU** e **2 GB RAM**.
 - Coleta automatica (ambos): script [`scripts/run_stress_monitor.sh`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/scripts/run_stress_monitor.sh).
 - Saida de monitoramento (ambos): CSV de `docker stats` + logs do container.
 
@@ -31,9 +31,9 @@ Fonte: [`docker-compose.stress.yml`](/home/jcarlos/Documents/work-projects/most-
 
 | Parametro | Valor atual | Impacto na metrica |
 |---|---:|---|
-| `cpus` | `2.0` | Define teto de CPU disponivel para o container. |
-| `mem_limit` | `1g` | Define teto de memoria RAM disponivel. |
-| `memswap_limit` | `1g` | Impede uso adicional de swap alem do limite de memoria. |
+| `cpus` | `3.0` | Define teto de CPU disponivel para o container. |
+| `mem_limit` | `2g` | Define teto de memoria RAM disponivel. |
+| `memswap_limit` | `2g` | Impede uso adicional de swap alem do limite de memoria. |
 | `ports` | `8000:8000` | Exposicao local da API para geracao de carga externa. |
 | `restart` | `no` | Nao reinicia automaticamente apos falha (falhas aparecem claramente no teste). |
 
@@ -99,6 +99,25 @@ COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 Exemplo (bot direto, 3 consultas):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_MAX_WORKERS=3 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+./scripts/run_stress_monitor.sh
+```
+
+Exemplo (3 consultas simultaneas, `refinar_busca=false`):
+```bash
+BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_REFINAR_BUSCA=false \
+BOT_MAX_WORKERS=3 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+./scripts/run_stress_monitor.sh
+```
+
+Exemplo (3 consultas simultaneas, `refinar_busca=true`):
+```bash
+BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_REFINAR_BUSCA=true \
+BOT_MAX_WORKERS=3 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -145,6 +164,10 @@ Organizacao por consulta no JSON consolidado:
 - campo `resultados`: mantido para compatibilidade, agora com `consulta_ordem` em cada item.
 - layout interno de `resultado.pessoa`/`resultado.beneficios` nao e alterado.
 
+Organizacao por beneficio no JSON individual:
+- cada item em `beneficios` inclui `beneficio_ordem` (`beneficio_1`, `beneficio_2`, ...) e `indice_beneficio`.
+- os campos antigos permanecem, sem quebra de compatibilidade.
+
 Recomendacao operacional (anti-bloqueio x desempenho):
 - evitar `slow_mo=0` como padrao em ambiente real; preferir `20` a `50` ms para reduzir assinatura de bot.
 - bloqueio de recursos em stress: usar `font,media` por padrao.
@@ -177,6 +200,10 @@ Minimo recomendado por rodada:
    - timeout, erro HTTP, reinicio do container, OOMKilled, queda de throughput.
 
 ## Observacao importante para este projeto
-O teste limita corretamente o hardware do container para simulacao (`2 CPU`/`1GB`) em ambos os modos.
+O teste limita corretamente o hardware do container para simulacao (`3 CPU`/`2GB`) em ambos os modos.
 - No modo API, a qualidade da metrificacao depende da carga aplicada em `STRESS_LOAD_COMMAND`.
 - No modo bot direto, a carga e definida pelas consultas passadas em `BOT_CONSULTA`/`BOT_CONSULTAS_JSON`.
+
+Licao de estabilidade (validada em 21/03/2026):
+- para busca por nome em `refinar_busca=false`, `wait_for_load_state("networkidle")` pode ficar pendente.
+- estrategia adotada: tolerar timeout de `networkidle` e continuar sincronizacao pelo contador `#countResultados`.

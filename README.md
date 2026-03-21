@@ -78,7 +78,7 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
-## Teste de estresse com hardware limitado (1GB RAM / 2 CPU)
+## Teste de estresse com hardware limitado (2GB RAM / 3 CPU)
 Use o compose dedicado para simular ambiente restrito:
 
 ```bash
@@ -124,10 +124,6 @@ STRESS_LOAD_COMMAND='for i in {1..30}; do curl -s http://127.0.0.1:8000/api/docs
 ### Teste de estresse do bot sem API (consulta direta)
 Nesse modo, o container executa o bot diretamente (sem Gunicorn/API) e finaliza ao concluir as consultas.
 
-Observação importante de estabilidade:
-- em `refinar_busca=false` (busca simples por dígitos), `slow_mo` muito baixo pode retornar `10000` resultados por falta de estabilização após digitação.
-- recomendado: `BOT_PLAYWRIGHT_SLOW_MO_MS` entre `20` e `50`.
-
 Consulta unica (padrao do compose):
 
 ```bash
@@ -144,6 +140,24 @@ Lote de consultas (maximo 3):
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+./scripts/run_stress_monitor.sh
+```
+
+Cenario validado de estabilidade (3 simultaneas, sem API):
+
+```bash
+BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_MAX_WORKERS=3 \
+BOT_REFINAR_BUSCA=false \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+./scripts/run_stress_monitor.sh
+```
+
+```bash
+BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_MAX_WORKERS=3 \
+BOT_REFINAR_BUSCA=true \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
