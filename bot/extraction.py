@@ -261,6 +261,8 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 log_event(logger, logging.WARNING, "falha_abrir_detalhe_beneficio", tipo=tipo, erro=str(e))
 
         beneficios_resultado.append({
+            "beneficio_ordem": f"beneficio_{i + 1}",
+            "indice_beneficio": i,
             "tipo": tipo,
             "nis": nis_benef,
             "valor_recebido": valor_recebido,
