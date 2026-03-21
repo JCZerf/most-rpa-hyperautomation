@@ -124,6 +124,10 @@ STRESS_LOAD_COMMAND='for i in {1..30}; do curl -s http://127.0.0.1:8000/api/docs
 ### Teste de estresse do bot sem API (consulta direta)
 Nesse modo, o container executa o bot diretamente (sem Gunicorn/API) e finaliza ao concluir as consultas.
 
+Observação importante de estabilidade:
+- em `refinar_busca=false` (busca simples por dígitos), `slow_mo` muito baixo pode retornar `10000` resultados por falta de estabilização após digitação.
+- recomendado: `BOT_PLAYWRIGHT_SLOW_MO_MS` entre `20` e `50`.
+
 Consulta unica (padrao do compose):
 
 ```bash

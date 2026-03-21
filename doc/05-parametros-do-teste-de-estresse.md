@@ -151,6 +151,11 @@ Recomendacao operacional (anti-bloqueio x desempenho):
 - para usar `image` sem quebrar tanto o fluxo: manter `BOT_PLAYWRIGHT_BLOCK_IMAGE_MODE=third_party`.
 - se quiser agressivo para benchmark bruto: `BOT_PLAYWRIGHT_BLOCK_IMAGE_MODE=all`, ciente de maior risco de falha.
 
+Desafio tecnico resolvido (consulta por digitos, `refinar_busca=false`):
+- causa raiz identificada: `slow_mo` muito baixo impede estabilizacao do resultado apos digitacao.
+- sintoma observado: contador retornando `10000` resultados (quando o esperado era `1`) e abertura de item incorreto.
+- solucao adotada: manter `BOT_PLAYWRIGHT_SLOW_MO_MS` entre `20` e `50` no modo sem refine.
+
 ## O que metrificar para comparacao entre execucoes
 Minimo recomendado por rodada:
 
