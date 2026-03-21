@@ -78,6 +78,72 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
+## Teste de estresse com hardware limitado (1GB RAM / 2 CPU)
+Use o compose dedicado para simular ambiente restrito:
+
+```bash
+docker compose -f docker-compose.stress.yml up --build
+```
+
+Com o serviço rodando, acompanhe consumo em tempo real:
+
+```bash
+docker stats most-rpa-bot-stress
+```
+
+Para encerrar:
+
+```bash
+docker compose -f docker-compose.stress.yml down
+```
+
+### Script de monitoramento (CPU/RAM + logs)
+Para automatizar a coleta de metricas e logs durante o teste:
+
+```bash
+./scripts/run_stress_monitor.sh
+```
+
+Arquivos gerados por execucao:
+- `logs/stress/<timestamp>/docker_stats.csv` (amostras de CPU/RAM)
+- `logs/stress/<timestamp>/container.log` (logs do bot)
+- `logs/stress/<timestamp>/meta.txt` (metadados da execucao)
+
+Exemplo com duracao e intervalo customizados:
+
+```bash
+DURATION_SECONDS=600 SAMPLE_INTERVAL_SECONDS=1 ./scripts/run_stress_monitor.sh
+```
+
+Exemplo com carga paralela (fazendo chamadas para API enquanto monitora):
+
+```bash
+STRESS_LOAD_COMMAND='for i in {1..30}; do curl -s http://127.0.0.1:8000/api/docs/ >/dev/null; done' ./scripts/run_stress_monitor.sh
+```
+
+### Teste de estresse do bot sem API (consulta direta)
+Nesse modo, o container executa o bot diretamente (sem Gunicorn/API) e finaliza ao concluir as consultas.
+
+Consulta unica (padrao do compose):
+
+```bash
+COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
+```
+
+Consulta unica customizada:
+
+```bash
+BOT_CONSULTA='04031769644' COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
+```
+
+Lote de consultas (maximo 3):
+
+```bash
+BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+./scripts/run_stress_monitor.sh
+```
+
 ## Executar como API (Django)
 ```bash
 python manage.py runserver 8000
@@ -106,6 +172,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Requisitos: [doc/02-requisito-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/02-requisito-do-projeto.md)
 - Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
+- Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.

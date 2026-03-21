@@ -1,0 +1,31 @@
+services:
+  bot-stress:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: most-rpa:bot-stress
+    container_name: most-rpa-bot-stress
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: "/app"
+      BOT_CONSULTA: "${BOT_CONSULTA:-04031769644}"
+      BOT_CONSULTAS_JSON: "${BOT_CONSULTAS_JSON:-}"
+      BOT_REFINAR_BUSCA: "${BOT_REFINAR_BUSCA:-true}"
+      BOT_HEADLESS: "${BOT_HEADLESS:-true}"
+      BOT_MAX_WORKERS: "${BOT_MAX_WORKERS:-1}"
+      BOT_OUTPUT_DIR: "${BOT_OUTPUT_DIR:-output/stress-bot}"
+      PLAYWRIGHT_SLOW_MO_MS: "${BOT_PLAYWRIGHT_SLOW_MO_MS:-20}"
+      PLAYWRIGHT_BLOCK_RESOURCE_TYPES: "${BOT_PLAYWRIGHT_BLOCK_RESOURCE_TYPES:-font,media}"
+      PLAYWRIGHT_BLOCK_IMAGE_MODE: "${BOT_PLAYWRIGHT_BLOCK_IMAGE_MODE:-third_party}"
+      PLAYWRIGHT_PRIMARY_DOMAIN: "${BOT_PLAYWRIGHT_PRIMARY_DOMAIN:-portaldatransparencia.gov.br}"
+      PLAYWRIGHT_IMAGE_ALLOW_PATTERNS: "${BOT_PLAYWRIGHT_IMAGE_ALLOW_PATTERNS:-captcha,challenge,recaptcha,hcaptcha,cloudflare,human}"
+    command: ["python", "scripts/run_bot_batch.py"]
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs
+    cpus: 2.0
+    mem_limit: 1g
+    memswap_limit: 1g
+    restart: "no"

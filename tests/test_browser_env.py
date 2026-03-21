@@ -16,10 +16,14 @@ class FakeContext:
     def __init__(self):
         self.new_page_calls = 0
         self.page = FakePage()
+        self.route_calls = []
 
     def new_page(self):
         self.new_page_calls += 1
         return self.page
+
+    def route(self, pattern, handler):
+        self.route_calls.append((pattern, handler))
 
     def close(self):
         return None
@@ -59,6 +63,7 @@ def test_create_browser_context_defaults(monkeypatch):
     monkeypatch.delenv("PLAYWRIGHT_HIDE_WEBDRIVER", raising=False)
     monkeypatch.delenv("PLAYWRIGHT_STORAGE_STATE_PATH", raising=False)
     monkeypatch.delenv("PLAYWRIGHT_SLOW_MO_MS", raising=False)
+    monkeypatch.delenv("PLAYWRIGHT_BLOCK_RESOURCE_TYPES", raising=False)
 
     pw = FakePlaywright()
     browser, context, page = create_browser_context(
@@ -81,6 +86,7 @@ def test_create_browser_context_defaults(monkeypatch):
     assert "user_agent" not in browser.new_context_kwargs
     assert "storage_state" not in browser.new_context_kwargs
     assert len(context.page.init_scripts) == 1
+    assert len(context.route_calls) == 0
 
 
 def test_create_browser_context_respects_env_flags(monkeypatch, tmp_path):
@@ -92,6 +98,7 @@ def test_create_browser_context_respects_env_flags(monkeypatch, tmp_path):
     monkeypatch.setenv("PLAYWRIGHT_HIDE_WEBDRIVER", "true")
     monkeypatch.setenv("PLAYWRIGHT_STORAGE_STATE_PATH", str(storage))
     monkeypatch.setenv("PLAYWRIGHT_SLOW_MO_MS", "25")
+    monkeypatch.setenv("PLAYWRIGHT_BLOCK_RESOURCE_TYPES", "font,media")
 
     pw = FakePlaywright()
     browser, context, page = create_browser_context(
@@ -112,6 +119,8 @@ def test_create_browser_context_respects_env_flags(monkeypatch, tmp_path):
     assert browser.new_context_kwargs["user_agent"] == "UA-Teste"
     assert browser.new_context_kwargs["storage_state"] == str(storage)
     assert len(context.page.init_scripts) == 1
+    assert len(context.route_calls) == 1
+    assert context.route_calls[0][0] == "**/*"
 
 
 def test_create_browser_context_ignores_missing_storage_state(monkeypatch):
@@ -130,6 +139,8 @@ def test_create_browser_context_ignores_missing_storage_state(monkeypatch):
     )
 
     assert "storage_state" not in browser.new_context_kwargs
+    assert "--disable-blink-features=AutomationControlled" not in pw.chromium.launch_kwargs["args"]
+    assert len(pw.chromium.browser.context.page.init_scripts) == 0
 
 
 class DummyBrowser:

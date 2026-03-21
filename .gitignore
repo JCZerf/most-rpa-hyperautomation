@@ -53,3 +53,6 @@ db.sqlite3
 
 # Logs
 *.log
+logs/
+logs/stress/
+logs/stress-bot/
