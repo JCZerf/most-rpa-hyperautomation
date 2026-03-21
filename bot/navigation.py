@@ -125,8 +125,12 @@ def perform_search(page: Any, url_base: str, alvo: str, usar_refine: bool) -> Di
             "clicar_lupa_busca",
             lambda: page.locator('button[aria-label^="Enviar dados do formulário de busca"]').click(),
         )
-
-    _executar_etapa("aguardar_carregamento_resultados", lambda: page.wait_for_load_state("networkidle"))
+    try:
+        _executar_etapa("aguardar_carregamento_resultados", lambda: page.wait_for_load_state("networkidle", timeout=3000))
+    except Exception:
+        log_event(logger, logging.WARNING, "networkidle_timeout_ignorado", motivo="carregamento pode ser infinito, mas resultados já disponíveis")
+        pass
+    page.wait_for_timeout(500)
     contador_locator = page.locator("#countResultados")
     _executar_etapa("aguardar_contador_resultados", lambda: contador_locator.wait_for(state="visible", timeout=15000))
 

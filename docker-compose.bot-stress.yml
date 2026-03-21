@@ -15,6 +15,7 @@ services:
       BOT_REFINAR_BUSCA: "${BOT_REFINAR_BUSCA:-true}"
       BOT_HEADLESS: "${BOT_HEADLESS:-true}"
       BOT_MAX_WORKERS: "${BOT_MAX_WORKERS:-1}"
+      BOT_SHARED_BROWSER: "${BOT_SHARED_BROWSER:-false}"
       BOT_OUTPUT_DIR: "${BOT_OUTPUT_DIR:-output/stress-bot}"
       PLAYWRIGHT_SLOW_MO_MS: "${BOT_PLAYWRIGHT_SLOW_MO_MS:-20}"
       PLAYWRIGHT_BLOCK_RESOURCE_TYPES: "${BOT_PLAYWRIGHT_BLOCK_RESOURCE_TYPES:-font,media}"
@@ -25,7 +26,7 @@ services:
     volumes:
       - ./output:/app/output
       - ./logs:/app/logs
-    cpus: 2.0
-    mem_limit: 1g
-    memswap_limit: 1g
+    cpus: 3.0
+    mem_limit: 2g
+    memswap_limit: 2g
     restart: "no"
