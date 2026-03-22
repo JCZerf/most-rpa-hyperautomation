@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
+import asyncio
 import json
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bot.scraper import TransparencyBot
-
-MAX_ALVOS = 3
+from bot.orchestrator import env_bool, executar_consultas_em_lote_async, get_runtime_limits
 
 
 def _parse_bool(raw: str | None, default: bool) -> bool:
@@ -39,22 +37,8 @@ def _parse_consultas() -> list[str]:
         consultas = [consulta_unica] if consulta_unica else []
 
     if not consultas:
-        raise ValueError(
-            "Nenhuma consulta informada. Defina BOT_CONSULTA ou BOT_CONSULTAS_JSON."
-        )
-    if len(consultas) > MAX_ALVOS:
-        raise ValueError(f"Maximo permitido: {MAX_ALVOS} consultas por execucao.")
+        raise ValueError("Nenhuma consulta informada. Defina BOT_CONSULTA ou BOT_CONSULTAS_JSON.")
     return consultas
-
-
-def _anexar_tempo_execucao(resultado: Any, duracao_ms: int) -> dict[str, Any]:
-    if not isinstance(resultado, dict):
-        return {"resultado": resultado, "duracao_execucao_ms": duracao_ms}
-    meta = dict(resultado.get("meta") or {})
-    meta["duracao_execucao_ms"] = duracao_ms
-    resultado["meta"] = meta
-    resultado["duracao_execucao_ms"] = duracao_ms
-    return resultado
 
 
 def _slug_consulta(valor: str) -> str:
@@ -63,14 +47,6 @@ def _slug_consulta(valor: str) -> str:
         clean = clean.replace("__", "_")
     clean = clean.strip("_")
     return clean[:60] or "consulta"
-
-
-def _run_single(consulta: str, headless: bool, refinar_busca: bool) -> dict[str, Any]:
-    started = time.perf_counter()
-    bot = TransparencyBot(headless=headless, alvo=consulta, usar_refine=refinar_busca)
-    result = bot.run()
-    elapsed_ms = int((time.perf_counter() - started) * 1000)
-    return _anexar_tempo_execucao(result, elapsed_ms)
 
 
 def _extract_auditoria(resultado: dict[str, Any] | None) -> tuple[str | None, str | None]:
@@ -107,81 +83,95 @@ def main() -> int:
 
     headless = _parse_bool(os.getenv("BOT_HEADLESS"), True)
     refinar_busca = _parse_bool(os.getenv("BOT_REFINAR_BUSCA"), False)
-    max_workers_raw = os.getenv("BOT_MAX_WORKERS", "1")
-    try:
-        max_workers = max(1, min(int(max_workers_raw), len(consultas)))
-    except ValueError:
-        max_workers = 1
+    incluir_base64 = _parse_bool(os.getenv("BOT_INCLUIR_BASE64"), False)
+    max_browsers, max_consultas_por_browser = get_runtime_limits()
 
     logger.info(
-        "Iniciando batch: consultas=%s headless=%s refinar_busca=%s max_workers=%s",
+        "Iniciando batch async: consultas=%s headless=%s refinar_busca=%s incluir_base64=%s max_browsers=%s max_consultas_por_browser=%s",
         len(consultas),
         headless,
         refinar_busca,
-        max_workers,
+        incluir_base64,
+        max_browsers,
+        max_consultas_por_browser,
     )
     logger.info("Consultas: %s", consultas)
 
     started_all = time.perf_counter()
+    itens_execucao = [
+        {"indice_entrada": idx, "consulta": consulta, "refinar_busca": refinar_busca}
+        for idx, consulta in enumerate(consultas)
+    ]
+
+    saida_execucao = asyncio.run(
+        executar_consultas_em_lote_async(
+            itens_execucao,
+            headless=headless,
+            max_consultas_por_browser=max_consultas_por_browser,
+            incluir_base64=incluir_base64,
+        )
+    )
+
     resultados: list[dict[str, Any] | None] = [None] * len(consultas)
     demarcacao_consultas: list[dict[str, Any] | None] = [None] * len(consultas)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_map = {
-            executor.submit(_run_single, consulta, headless, refinar_busca): idx
-            for idx, consulta in enumerate(consultas)
-        }
-        for future in as_completed(future_map):
-            idx = future_map[future]
-            consulta = consultas[idx]
-            consulta_ordem = f"consulta_{idx + 1}"
-            try:
-                result = future.result()
-                status = result.get("status", "ok")
-                logger.info("Consulta finalizada: alvo=%s status=%s", consulta, status)
-                id_consulta, data_hora_consulta = _extract_auditoria(result)
-                item_payload = {
-                    "consulta_ordem": consulta_ordem,
-                    "consulta": consulta,
-                    "status": status,
-                    "resultado": result,
-                }
-                resultados[idx] = item_payload
+    for item in saida_execucao.get("resultados", []):
+        idx = int(item.get("indice_entrada", -1))
+        if idx < 0 or idx >= len(consultas):
+            continue
+        consulta = consultas[idx]
+        consulta_ordem = f"consulta_{idx + 1}"
+        result = item.get("resultado") or {"status": "error", "error": "resultado ausente"}
+        status = result.get("status", "ok")
+        logger.info("Consulta finalizada: alvo=%s status=%s", consulta, status)
+        id_consulta, data_hora_consulta = _extract_auditoria(result)
 
-                item_file = out_dir / f"item_{idx+1}_{_slug_consulta(consulta)}_{run_id}.json"
-                with item_file.open("w", encoding="utf-8") as fp:
-                    json.dump(item_payload, fp, ensure_ascii=False, indent=2)
-                logger.info("Arquivo de resultado por consulta: %s", item_file)
-                demarcacao_consultas[idx] = {
-                    "consulta_ordem": consulta_ordem,
-                    "indice_resultados": idx,
-                    "consulta": consulta,
-                    "status": status,
-                    "id_consulta": id_consulta,
-                    "data_hora_consulta": data_hora_consulta,
-                    "arquivo_resultado_consulta": str(item_file),
-                }
-            except Exception as exc:  # pragma: no cover
-                logger.exception("Falha critica na consulta %s", consulta)
-                item_payload = {
-                    "consulta_ordem": consulta_ordem,
-                    "consulta": consulta,
-                    "status": "error",
-                    "error": str(exc),
-                }
-                resultados[idx] = item_payload
-                item_file = out_dir / f"item_{idx+1}_{_slug_consulta(consulta)}_{run_id}.json"
-                with item_file.open("w", encoding="utf-8") as fp:
-                    json.dump(item_payload, fp, ensure_ascii=False, indent=2)
-                logger.info("Arquivo de resultado por consulta: %s", item_file)
-                demarcacao_consultas[idx] = {
-                    "consulta_ordem": consulta_ordem,
-                    "indice_resultados": idx,
-                    "consulta": consulta,
-                    "status": "error",
-                    "id_consulta": None,
-                    "data_hora_consulta": None,
-                    "arquivo_resultado_consulta": str(item_file),
-                }
+        item_payload = {
+            "consulta_ordem": consulta_ordem,
+            "consulta": consulta,
+            "status": status,
+            "duracao_segundos": float(item.get("duracao_segundos", 0.0)),
+            "resultado": result,
+        }
+        resultados[idx] = item_payload
+
+        item_file = out_dir / f"item_{idx+1}_{_slug_consulta(consulta)}_{run_id}.json"
+        with item_file.open("w", encoding="utf-8") as fp:
+            json.dump(item_payload, fp, ensure_ascii=False, indent=2)
+        logger.info("Arquivo de resultado por consulta: %s", item_file)
+        demarcacao_consultas[idx] = {
+            "consulta_ordem": consulta_ordem,
+            "indice_resultados": idx,
+            "consulta": consulta,
+            "status": status,
+            "id_consulta": id_consulta,
+            "data_hora_consulta": data_hora_consulta,
+            "arquivo_resultado_consulta": str(item_file),
+        }
+
+    for idx, item in enumerate(resultados):
+        if item is not None:
+            continue
+        consulta = consultas[idx]
+        consulta_ordem = f"consulta_{idx + 1}"
+        item_payload = {
+            "consulta_ordem": consulta_ordem,
+            "consulta": consulta,
+            "status": "error",
+            "error": "resultado ausente",
+        }
+        resultados[idx] = item_payload
+        item_file = out_dir / f"item_{idx+1}_{_slug_consulta(consulta)}_{run_id}.json"
+        with item_file.open("w", encoding="utf-8") as fp:
+            json.dump(item_payload, fp, ensure_ascii=False, indent=2)
+        demarcacao_consultas[idx] = {
+            "consulta_ordem": consulta_ordem,
+            "indice_resultados": idx,
+            "consulta": consulta,
+            "status": "error",
+            "id_consulta": None,
+            "data_hora_consulta": None,
+            "arquivo_resultado_consulta": str(item_file),
+        }
 
     total_ms = int((time.perf_counter() - started_all) * 1000)
     payload = {
@@ -190,7 +180,8 @@ def main() -> int:
         "consultas": consultas,
         "headless": headless,
         "refinar_busca": refinar_busca,
-        "max_workers": max_workers,
+        "incluir_base64": incluir_base64,
+        "meta_execucao": saida_execucao.get("meta_execucao", {}),
         "duracao_total_ms": total_ms,
         "demarcacao_consultas": demarcacao_consultas,
         "resultados": resultados,

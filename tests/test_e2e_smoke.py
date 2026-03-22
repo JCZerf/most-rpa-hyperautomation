@@ -48,6 +48,18 @@ def _require_success_enabled() -> bool:
     return os.getenv("E2E_REQUIRE_SUCCESS", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _issue_access_token(base_url: str, client_id: str, client_secret: str):
+    return _post_json(
+        f"{base_url}/api/token/",
+        {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "bot:read",
+        },
+    )
+
+
 def _assert_consulta_contract(status_code: int, body: dict):
     assert status_code in (200, 207, 400, 401, 403, 500, 502)
     assert isinstance(body, dict)
@@ -78,27 +90,29 @@ def test_e2e_smoke_consulta_simples_e_refinada():
 
     now = datetime.now(timezone.utc).isoformat()
 
-    token_status, token_body = _post_json(
-        f"{base_url}/api/token/",
-        {
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "scope": "bot:read",
-        },
-    )
+    token_status_1, token_body_1 = _issue_access_token(base_url, client_id, client_secret)
+    token_status_2, token_body_2 = _issue_access_token(base_url, client_id, client_secret)
     _save_artifact(
-        "01_token",
+        "01_tokens",
         {
             "timestamp_utc": now,
-            "status_code": token_status,
-            "body": {k: v for k, v in token_body.items() if k != "access_token"},
+            "token_1": {
+                "status_code": token_status_1,
+                "body": {k: v for k, v in token_body_1.items() if k != "access_token"},
+            },
+            "token_2": {
+                "status_code": token_status_2,
+                "body": {k: v for k, v in token_body_2.items() if k != "access_token"},
+            },
         },
     )
-    assert token_status == 200
-    assert "access_token" in token_body
+    assert token_status_1 == 200
+    assert token_status_2 == 200
+    assert "access_token" in token_body_1
+    assert "access_token" in token_body_2
 
-    access_token = token_body["access_token"]
+    access_token_false = token_body_1["access_token"]
+    access_token_true = token_body_2["access_token"]
 
     start_false = datetime.now(timezone.utc)
     start_true = datetime.now(timezone.utc)
@@ -107,13 +121,13 @@ def test_e2e_smoke_consulta_simples_e_refinada():
             _post_json,
             f"{base_url}/api/consulta/",
             {"consulta": consulta_base, "refinar_busca": False},
-            access_token,
+            access_token_false,
         )
         future_true = executor.submit(
             _post_json,
             f"{base_url}/api/consulta/",
             {"consulta": consulta_refinada, "refinar_busca": True},
-            access_token,
+            access_token_true,
         )
         status_false, body_false = future_false.result()
         end_false = datetime.now(timezone.utc)

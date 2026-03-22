@@ -1,19 +1,20 @@
-import logging
-import datetime
 import base64
+import datetime
+import logging
 import unicodedata
-from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
+
 from .logging_utils import log_event
-from .utils import valor_texto_para_float, formatar_brl
+from .utils import formatar_brl, valor_texto_para_float
 
 logger = logging.getLogger(__name__)
 
 
-def extract_personal_info(page: Any) -> Dict[str, str]:
-    nome = page.locator("div.col-sm-4:has(strong:has-text('Nome')) span").inner_text().strip()
-    cpf = page.locator("div.col-sm-3:has(strong:has-text('CPF')) span").inner_text().strip()
-    localidade = page.locator("div.col-sm-3:has(strong:has-text('Localidade')) span").inner_text().strip()
+async def extract_personal_info_async(page: Any) -> Dict[str, str]:
+    nome = (await page.locator("div.col-sm-4:has(strong:has-text('Nome')) span").inner_text()).strip()
+    cpf = (await page.locator("div.col-sm-3:has(strong:has-text('CPF')) span").inner_text()).strip()
+    localidade = (await page.locator("div.col-sm-3:has(strong:has-text('Localidade')) span").inner_text()).strip()
     return {"nome": nome, "cpf": cpf, "localidade": localidade}
 
 
@@ -22,17 +23,18 @@ def _agora_brt() -> Dict[str, str]:
     return {"data_consulta": agora.strftime("%d/%m/%Y"), "hora_consulta": agora.strftime("%H:%M")}
 
 
-def _detectar_beneficios_painel(page: Any) -> List[str]:
+async def _detectar_beneficios_painel(page: Any) -> List[str]:
     beneficios_possiveis = ["Auxílio Brasil", "Auxílio Emergencial", "Bolsa Família"]
     encontrados: List[str] = []
     for beneficio in beneficios_possiveis:
-        if page.locator(f"strong:has-text('{beneficio}')").count() > 0:
+        if await page.locator(f"strong:has-text('{beneficio}')").count() > 0:
             encontrados.append(beneficio)
     return encontrados
 
 
-def _extrair_textos_cols(cols: Any) -> List[str]:
-    return [cols.nth(ci).inner_text().strip() for ci in range(cols.count())]
+async def _extrair_textos_cols(cols: Any) -> List[str]:
+    total = await cols.count()
+    return [(await cols.nth(ci).inner_text()).strip() for ci in range(total)]
 
 
 def _parse_linha_valores_recebidos(valores: List[str]) -> Dict[str, str] | None:
@@ -80,67 +82,69 @@ def _parse_linha_generica(valores: List[str]) -> Dict[str, str] | None:
     return {f"col_{idx}": val for idx, val in enumerate(valores)}
 
 
-def _coletar_linhas_tabela(tabela: Any, nova_pagina: Any, parser) -> List[Dict[str, str]]:
+async def _coletar_linhas_tabela(tabela: Any, nova_pagina: Any, parser) -> List[Dict[str, str]]:
     detalhes: List[Dict[str, str]] = []
-    tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
-    nova_pagina.wait_for_timeout(300)
+    await tabela.locator("tbody td").first.wait_for(state="visible", timeout=10000)
+    await nova_pagina.wait_for_timeout(300)
     linhas = tabela.locator("tbody tr")
-    for r in range(linhas.count()):
+    total_linhas = await linhas.count()
+    for r in range(total_linhas):
         cols = linhas.nth(r).locator("td")
-        valores = _extrair_textos_cols(cols)
+        valores = await _extrair_textos_cols(cols)
         parsed = parser(valores)
         if parsed:
             detalhes.append(parsed)
     return detalhes
 
 
-def _encontrar_tabela_fallback(nova_pagina: Any) -> Any | None:
-    if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+async def _encontrar_tabela_fallback(nova_pagina: Any) -> Any | None:
+    if await nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
         return nova_pagina.locator("table#tabelaDetalheDisponibilizado")
 
     tables = nova_pagina.locator("table")
-    for ti in range(tables.count()):
+    total = await tables.count()
+    for ti in range(total):
         tabela = tables.nth(ti)
-        if tabela.locator("tbody tr").count() > 0:
+        if await tabela.locator("tbody tr").count() > 0:
             return tabela
     return None
 
 
-def _coletar_detalhe_parcelas(nova_pagina: Any) -> List[Dict[str, str]]:
+async def _coletar_detalhe_parcelas(nova_pagina: Any) -> List[Dict[str, str]]:
     try:
-        if nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
+        if await nova_pagina.locator("table#tabelaDetalheValoresRecebidos").count():
             tabela = nova_pagina.locator("table#tabelaDetalheValoresRecebidos")
-            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_recebidos)
+            return await _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_recebidos)
 
-        if nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
+        if await nova_pagina.locator("table#tabelaDetalheDisponibilizado").count():
             tabela = nova_pagina.locator("table#tabelaDetalheDisponibilizado")
-            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_disponibilizado)
+            return await _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_disponibilizado)
 
-        if nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
+        if await nova_pagina.locator("table#tabelaDetalheValoresSacados").count():
             tabela = nova_pagina.locator("table#tabelaDetalheValoresSacados")
-            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_sacados)
+            return await _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_valores_sacados)
 
-        tabela = _encontrar_tabela_fallback(nova_pagina)
+        tabela = await _encontrar_tabela_fallback(nova_pagina)
         if tabela:
-            return _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_generica)
+            return await _coletar_linhas_tabela(tabela, nova_pagina, _parse_linha_generica)
     except Exception:
         return []
     return []
 
 
-def _detectar_verificacao_humana(nova_pagina: Any) -> bool:
+async def _detectar_verificacao_humana(nova_pagina: Any) -> bool:
     def _normalizar(texto: str) -> str:
         base = unicodedata.normalize("NFD", texto or "")
         base = "".join(ch for ch in base if unicodedata.category(ch) != "Mn")
         return base.lower()
 
     try:
-        titulo = _normalizar(nova_pagina.title() or "")
+        titulo = _normalizar(await nova_pagina.title() or "")
     except Exception:
         titulo = ""
 
     try:
-        corpo = _normalizar(nova_pagina.inner_text("body", timeout=2000) or "")
+        corpo = _normalizar(await nova_pagina.inner_text("body", timeout=2000) or "")
     except Exception:
         corpo = ""
 
@@ -156,15 +160,12 @@ def _detectar_verificacao_humana(nova_pagina: Any) -> bool:
     return any(s in texto for s in sinais)
 
 
-def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
-    # Captura panorama
-    panorama_bytes = page.screenshot(full_page=True)
+async def extract_benefits_async(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
+    panorama_bytes = await page.screenshot(full_page=True)
     panorama_base64 = base64.b64encode(panorama_bytes).decode("utf-8")
     log_event(logger, logging.INFO, "panorama_capturado")
 
-    beneficios_encontrados = _detectar_beneficios_painel(page)
-
-    # log resumo inicial de benefícios detectados
+    beneficios_encontrados = await _detectar_beneficios_painel(page)
     log_event(logger, logging.INFO, "beneficios_detectados_painel", beneficios=beneficios_encontrados)
 
     if not beneficios_encontrados:
@@ -187,28 +188,30 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
 
     beneficios_resultado: List[Dict[str, Any]] = []
     blocos = page.locator("#accordion-recebimentos-recursos .br-table")
-    total_blocos = blocos.count()
+    total_blocos = await blocos.count()
     log_event(logger, logging.INFO, "inicio_extracao_beneficios", total_blocos=total_blocos)
+
     for i in range(total_blocos):
         bloco = blocos.nth(i)
         try:
-            tipo = bloco.locator("strong").inner_text().strip()
+            tipo = (await bloco.locator("strong").inner_text()).strip()
         except Exception:
-            tipo = bloco.inner_text().strip().split('\n', 1)[0][:50]
+            tipo = (await bloco.inner_text()).strip().split("\n", 1)[0][:50]
 
         log_event(logger, logging.INFO, "extraindo_beneficio", indice=i + 1, total=total_blocos, tipo=tipo)
 
         try:
             cols = bloco.locator("table tbody tr td")
-            nis_texto = cols.nth(1).inner_text().strip() if cols.count() > 1 else ""
+            cols_count = await cols.count()
+            nis_texto = (await cols.nth(1).inner_text()).strip() if cols_count > 1 else ""
             nis_benef = " ".join(nis_texto.split())
-            valor_recebido = cols.last.inner_text().strip() if cols.count() >= 4 else ""
+            valor_recebido = (await cols.last.inner_text()).strip() if cols_count >= 4 else ""
         except Exception:
             nis_benef = None
             valor_recebido = ""
 
         try:
-            href = bloco.locator("tbody tr a").first.get_attribute("href")
+            href = await bloco.locator("tbody tr a").first.get_attribute("href")
         except Exception:
             href = None
 
@@ -220,16 +223,15 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
         if href:
             try:
                 detalhe_url = href if href.startswith("http") else url_base.rstrip("/") + href
-                nova_pagina = context.new_page()
-                nova_pagina.goto(detalhe_url, wait_until="networkidle")
+                nova_pagina = await context.new_page()
+                await nova_pagina.goto(detalhe_url, wait_until="networkidle")
                 try:
-                    nova_pagina.wait_for_selector(".loading-grande", timeout=2000)
-                    nova_pagina.wait_for_selector(".loading-grande", state="hidden", timeout=20000)
+                    await nova_pagina.wait_for_selector(".loading-grande", timeout=2000)
+                    await nova_pagina.wait_for_selector(".loading-grande", state="hidden", timeout=20000)
                 except Exception:
                     pass
 
-
-                if _detectar_verificacao_humana(nova_pagina):
+                if await _detectar_verificacao_humana(nova_pagina):
                     detalhe_status = "human_verification"
                     detalhe_mensagem = (
                         "Vamos confirmar que você é humano. Conclua a verificação de segurança antes de continuar."
@@ -242,11 +244,11 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                         detalhe_url=detalhe_url,
                     )
                 else:
-                    detalhe_parcelas = _coletar_detalhe_parcelas(nova_pagina)
+                    detalhe_parcelas = await _coletar_detalhe_parcelas(nova_pagina)
 
                 if detalhe_status == "ok":
                     try:
-                        bytes_det = nova_pagina.screenshot(full_page=True)
+                        bytes_det = await nova_pagina.screenshot(full_page=True)
                         detalhe_evidence_b64 = base64.b64encode(bytes_det).decode("utf-8")
                     except Exception:
                         detalhe_evidence_b64 = None
@@ -254,24 +256,26 @@ def extract_benefits(context: Any, page: Any, url_base: str) -> Dict[str, Any]:
                 log_event(logger, logging.INFO, "detalhe_beneficio_finalizado", tipo=tipo, parcelas=len(detalhe_parcelas))
 
                 try:
-                    nova_pagina.close()
+                    await nova_pagina.close()
                 except Exception:
                     pass
             except Exception as e:
                 log_event(logger, logging.WARNING, "falha_abrir_detalhe_beneficio", tipo=tipo, erro=str(e))
 
-        beneficios_resultado.append({
-            "beneficio_ordem": f"beneficio_{i + 1}",
-            "indice_beneficio": i,
-            "tipo": tipo,
-            "nis": nis_benef,
-            "valor_recebido": valor_recebido,
-            "detalhe_href": href,
-            "detalhe_evidencia": detalhe_evidence_b64,
-            "detalhe_status": detalhe_status,
-            "detalhe_mensagem": detalhe_mensagem,
-            "parcelas": detalhe_parcelas,
-        })
+        beneficios_resultado.append(
+            {
+                "beneficio_ordem": f"beneficio_{i + 1}",
+                "indice_beneficio": i,
+                "tipo": tipo,
+                "nis": nis_benef,
+                "valor_recebido": valor_recebido,
+                "detalhe_href": href,
+                "detalhe_evidencia": detalhe_evidence_b64,
+                "detalhe_status": detalhe_status,
+                "detalhe_mensagem": detalhe_mensagem,
+                "parcelas": detalhe_parcelas,
+            }
+        )
 
     ts = _agora_brt()
 

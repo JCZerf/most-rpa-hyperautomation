@@ -1,7 +1,3 @@
-## Atalhos rápidos
-- Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
-- Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
-
 ## Visão geral
 - **Aplicação:** Robô de Automação Robótica de Processos (RPA) com abordagem de hiperautomação em Python.
 - **Propósito:** Automatizar a coleta de dados do Portal da Transparência (consulta “Pessoas Físicas e Jurídicas”) e entregar um JSON consolidado com evidência em Base64 para uso em fluxos internos.
@@ -47,7 +43,7 @@
 ## Entradas e saídas
 - **Entradas obrigatórias:** CPF, nome ou NIS (ao menos um).
 - **Entrada opcional:** beneficiário de programa social.
-- **Saída:** JSON contendo dados do panorama, detalhes de benefícios (Auxílio Brasil, Auxílio Emergencial, Bolsa Família) e imagem Base64 da tela.
+- **Saída:** JSON contendo dados do panorama, detalhes de benefícios (Auxílio Brasil, Auxílio Emergencial, Bolsa Família) e evidências em Base64 da tela (quando habilitadas).
 
 ## Critérios de sucesso (iniciais)
 - Execução ponta a ponta sem intervenção manual para casos válidos.

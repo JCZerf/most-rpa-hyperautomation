@@ -4,21 +4,25 @@ Automação RPA/hiperautomação em Python que consulta o Portal da Transparênc
 
 Principais modos de uso:
 - **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
-- **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
-- **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
+- **Runner local async**: script `bot/main.py` para execuções unitárias ou em lote, gravando resultados em `output/`.
+- **Hiperautomação (Make + Frontend externo)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
-## Links rapidos
+## Links rapidos (homologacao)
 ```text
 API (Swagger): https://most-rpa-hyperautomation-2k5peguzzq-ue.a.run.app/api/docs/
 Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 ```
+> Observacao: os links acima referenciam o ambiente de homologacao utilizado no projeto/desafio.
 
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
-- Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
-- Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
-- `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
-- GitHub Actions para integração contínua (testes/smoke) e entrega contínua controlada no Cloud Run.
+- Django + Django REST Framework + drf-spectacular para API REST e documentação OpenAPI/Swagger (`/api/docs/`).
+- Autenticação OAuth2 `client_credentials` + JWT HS256 de uso único por consulta (`api/auth.py`).
+- Bot assíncrono em `bot/scraper.py`, com navegação em `bot/navigation.py`, extração em `bot/extraction.py` e validação em `bot/validators.py`.
+- Orquestração de concorrência/fila em `bot/orchestrator.py` (browser fixo em `1` e paralelismo por abas).
+- Runner local em `bot/main.py` e runner de stress em `scripts/run_bot_batch.py`.
+- Observabilidade com `django-prometheus`, Prometheus e Grafana (alertas Telegram validados em ambiente local).
+- GitHub Actions para CI (testes/smoke/E2E) e CD controlado no Cloud Run.
 
 ## Integração contínua e entrega
 - **CI (integração contínua):** workflows no GitHub Actions para validações e smoke test (`.github/workflows/e2e-smoke.yml`).
@@ -27,56 +31,71 @@ Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 - **Sem deploy automático por commit/merge em branch**.
 
 ## Estrutura do projeto
+Itens versionados no repositório:
 ```text
 most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
-├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
+├── img/                      # Evidências visuais (integrações, observabilidade e demo)
 ├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
-├── output/                   # Resultados JSON gerados nas execuções locais (runtime)
+├── scripts/                  # Scripts auxiliares (stress monitor e batch runner)
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
 ├── docker-compose.observability.yml  # Stack local Prometheus + Grafana
+├── docker-compose.observability.alerting-bootstrap.yml  # Bootstrap opcional de alertas Grafana
 ├── docker-compose.bot-stress.yml     # Stress do bot sem API
-├── example.env               # Template de variáveis de ambiente
-├── main.py                   # Runner local para execuções em lote
+├── .env.example              # Template alternativo de variáveis de ambiente
 ├── manage.py                 # Comando de gerenciamento Django
 ├── requirements.txt          # Dependências Python
-├── README.md                 # Guia de uso e operação
-└── logs/                     # Logs locais por execução do runner (gerado em runtime)
+└── README.md                 # Guia de uso e operação
 ```
+
+Itens locais (ignorados no Git) usados em runtime:
+- `bot_sync_v1/` (legado local)
+- `output/` (resultados gerados)
+- `logs/` (logs de execução/stress)
+- `.env` e arquivos `*.env` (segredos/configuração local)
 
 ## Fluxo da API
 ```mermaid
-flowchart LR
+flowchart TD
     A[Cliente/API Consumer] --> B[POST /api/token]
-    B --> C[JWT Bearer]
-    C --> D[POST /api/consulta]
-    D --> E[Validação e Autorização]
-    E --> F[Bot Playwright]
-    F --> G[Portal da Transparência]
-    G --> H[Extração de panorama e benefícios]
-    H --> I[Evidências em Base64]
-    I --> J[Resposta JSON]
-    J --> A
+    B --> C[Access token JWT Bearer uso único]
+    C --> D[POST /api/consulta com Authorization Bearer]
+    D --> E[Validação de token assinatura escopo e consumo único]
+    E --> F[Validação de payload]
+    F --> G{Modo da requisição}
+    G --> H[Single consulta]
+    G --> I[Lote consultas ou itens]
+    I --> J[Orquestrador async 1 browser fixo abas paralelas e fila]
+    H --> K[Execução do bot async]
+    J --> K
+    K --> L[Playwright no Portal da Transparência extração de dados]
+    L --> M{incluir_base64}
+    M -->|true| N[Anexa evidências em Base64]
+    M -->|false| O[Retorno leve sem imagens]
+    N --> P[Resposta JSON]
+    O --> P
+    P --> A
 ```
 
 ## Requisitos
-- Python 3.10+ (testado em Linux)
-- `pip install -r requirements.txt`
+- Python 3.10+ (recomendado 3.12, alinhado com Docker e CI)
+- `pip` e `venv` para instalação das dependências Python
 - Browsers do Playwright instalados: `playwright install`  
   (em Linux headless pode precisar de libs do Chromium: `libnss3`, `libatk1.0-0`, `libgtk-3-0`, etc.)
+- Docker e Docker Compose (opcional, para execução containerizada, observabilidade e stress test)
 
 ## Instalação rápida
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install
-cp example.env .env   # ajuste os valores reais
+cp .env.example .env   # ajuste os valores reais
 ```
 > Em produção (Cloud Run ou similar), ajuste `ALLOWED_HOSTS` para incluir o domínio do serviço (ex.: `*.run.app`).
 
@@ -87,109 +106,28 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
-## Observabilidade - Prometheus (fase 1)
-Implementação base da observabilidade com métricas da API em `GET /metrics` e coleta via Prometheus.
-
-Arquivos principais:
-- `docker-compose.observability.yml`
-- `monitoring/prometheus/prometheus.yml`
-- instrumentação em `web/settings.py` e `web/urls.py`
-
-## Observabilidade - Grafana (fase 2)
-Dashboard visual sobre as métricas do Prometheus, sem depender da leitura direta de PromQL.
-
-Arquivos principais:
-- `docker-compose.observability.yml`
-- `monitoring/grafana/provisioning/datasources/prometheus.yml`
-- `monitoring/grafana/provisioning/dashboards/dashboards.yml`
-- `monitoring/grafana/dashboards/most-rpa-api-overview.json`
-
-## Observabilidade - Alertas Telegram (fase 3)
-Fluxo separado da subida padrão com duas opções:
-- `manual` (recomendado no dia a dia): sem provisionar alertas automaticamente.
-- `automático` (bootstrap): provisiona regras/templates ao subir o Grafana.
-
-Arquivos principais:
-- `monitoring/grafana/provisioning/alerting/alert-rules.yml`
-- `monitoring/grafana/provisioning/alerting/templates.yml`
-- `docker-compose.observability.alerting-bootstrap.yml`
-
-Modo manual (padrão, não recria alertas):
+## Observabilidade (resumo)
+- Stack local: Prometheus + Grafana, com alertas via Telegram no Grafana.
+- Métricas da API em `GET /metrics` e dashboard provisionado em `monitoring/grafana/dashboards/most-rpa-api-overview.json`.
+- Subida rápida (manual):
 ```bash
 docker compose -f docker-compose.observability.yml up -d
 ```
-
-Modo automático (bootstrap de alertas provisionados):
+- Bootstrap opcional de alertas:
 ```bash
 docker compose -f docker-compose.observability.yml -f docker-compose.observability.alerting-bootstrap.yml up -d --force-recreate grafana
 ```
+- Detalhes completos (arquitetura, métricas, PromQL e operação): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+- Nota de escopo: no contexto do desafio, a stack de observabilidade foi validada localmente e não mantida em cloud por custo.
 
-Fluxo manual na UI (quando não usar bootstrap):
-1. `Alerting > Alert rules` (criar/importar regras com base em `alert-rules.yml`).
-2. `Alerting > Notification templates` (usar template de `templates.yml`).
-3. Configurar `Contact points` e `Notification policies` manualmente por ambiente.
-
-Guia completo (catálogo de métricas, interpretação e PromQL):  
-[doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
-
-## Teste de estresse do bot (2GB RAM / 3 CPU)
-### Script de monitoramento (CPU/RAM + logs)
-Para automatizar a coleta de metricas e logs durante o teste:
-
-```bash
-./scripts/run_stress_monitor.sh
-```
-
-Arquivos gerados por execucao:
-- `logs/stress/<timestamp>/docker_stats.csv` (amostras de CPU/RAM)
-- `logs/stress/<timestamp>/container.log` (logs do bot)
-- `logs/stress/<timestamp>/meta.txt` (metadados da execucao)
-
-Exemplo com duracao e intervalo customizados:
-
-```bash
-DURATION_SECONDS=600 SAMPLE_INTERVAL_SECONDS=1 ./scripts/run_stress_monitor.sh
-```
-
-Teste em modo bot (sem API): o container executa o bot diretamente e finaliza ao concluir as consultas.
-
-Consulta unica (padrao do compose):
-
+## Teste de estresse do bot (resumo)
+- Ambiente de referência dos benchmarks: **2 GB RAM / 3 CPU** (container).
+- Execução padrão:
 ```bash
 COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 ```
-
-Consulta unica customizada:
-
-```bash
-BOT_CONSULTA='04031769644' COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
-```
-
-Lote de consultas (maximo 3):
-
-```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
-
-Cenario validado de estabilidade (3 simultaneas, sem API):
-
-```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_WORKERS=3 \
-BOT_REFINAR_BUSCA=false \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
-
-```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_WORKERS=3 \
-BOT_REFINAR_BUSCA=true \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
+- Artefatos gerados por execução: `docker_stats.csv`, `container.log` e `meta.txt` em `logs/stress/<benchmark>/<timestamp>/`.
+- Detalhes completos (parâmetros, cenários e histórico de benchmark): [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
 
 ## Executar como API (Django)
 ```bash
@@ -197,30 +135,51 @@ python manage.py runserver 8000
 ```
 - Documentação interativa (Swagger): `http://127.0.0.1:8000/api/docs/`
 - Esquema OpenAPI (YAML/JSON): `http://127.0.0.1:8000/api/schema/`
-- Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. Tokens HS256 são assinados com `API_MASTER_KEY` (mín. 32 chars) e expiram após o TTL configurado (`API_TOKEN_TTL`).
+- Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. O token é **de uso único** (cada chamada em `/api/consulta/` precisa de autenticação nova). Tokens HS256 são assinados com `API_MASTER_KEY` (mín. 32 chars) e têm expiração de segurança (`API_TOKEN_TTL`) caso não sejam usados.
 
+<a id="auth-reference"></a>
 ### Autenticação (OAuth2 client_credentials simplificado)
 - `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`.
-- Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL = `API_TOKEN_TTL`.
-- Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens HS256, `aud` configurado por `OAUTH_AUDIENCE`, expiram após `API_TOKEN_TTL` segundos, e são assinados com `API_MASTER_KEY` (>=32 chars).
+- Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL de segurança para token não usado = `API_TOKEN_TTL`.
+- Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Cada token aceita somente **1 uso** na rota de consulta; reuso retorna `401`. Tokens HS256 usam `aud` configurado por `OAUTH_AUDIENCE` e assinatura `API_MASTER_KEY` (>=32 chars).
+- Observação técnica: o controle de reuso do token é em memória por processo da API. Para unicidade global com múltiplos workers/instâncias, usar store compartilhado (ex.: Redis).
+
+### Próxima implementação (planejada): Redis para uso único global de token
+- Objetivo: garantir unicidade de uso do token JWT em ambiente distribuído (multi-worker e multi-instância).
+- Estado atual: o bloqueio de reuso (`jti`) funciona por processo (memória local), suficiente para ambiente simples e desenvolvimento.
+- Estratégia planejada:
+  - persistir `jti` em store compartilhado Redis;
+  - usar operação atômica (`SET NX EX`) para aceitar apenas o primeiro consumo;
+  - usar TTL alinhado ao `exp` do token para expurgo automático da chave.
+- Critérios de aceite planejados:
+  - duas requisições simultâneas com o mesmo token devem resultar em `200` + `401`;
+  - o mesmo token não pode ser aceito em instâncias diferentes;
+  - indisponibilidade do Redis deve ter comportamento explícito (fail closed ou fallback controlado por env).
+- Variáveis de ambiente planejadas:
+  - `REDIS_URL` (endereço de conexão);
+  - `TOKEN_REPLAY_STORE` (ex.: `memory` ou `redis`, default inicial `memory` até migração completa).
 
 ### Endpoint principal
 `POST /api/consulta/`
 
 Payloads aceitos:
 - **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta dupla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}` (máx. 3 entradas)
-- **Consulta tripla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta em lote simples**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": false}`
 - **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
-- **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
+- **Consulta em lote avançada**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": true}`
+- **Flag opcional de resposta leve**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
+
+Paralelismo padrão do bot async por requisição:
+- `1` browser fixo por execução/lote
+- até `4` consultas em paralelo por abas (`BOT_MAX_CONSULTAS_POR_BROWSER`)
+- excedentes entram em fila automática no mesmo request.
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Erros de execução retornam `status="error"` com HTTP não-200.
 
 ### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
-- Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1 a 3 itens), evitando itens fixos vazios.
+- Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1..N itens), evitando itens fixos vazios.
 - Exemplo de entrada (1 item): `{"consultas":["04031769644"],"refinar_busca":true}`
-- Exemplo de entrada (3 itens): `{"consultas":["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"],"refinar_busca":true}`
+- Exemplo de entrada (3 itens): `{"consultas":["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"],"refinar_busca":true}`
 - Chamada da API: repassar o array `consultas` sem posições fixas para evitar `null` no payload.
 - Pós-processamento: `Parse JSON` -> `Iterator` em `resultados[]` -> `Google Drive` -> `Google Sheets`.
 - Mapeamento após iterator: usar campos do bundle do `Iterator` (ex.: `consulta`, `status`, `resultado.*`), não campos do payload bruto do HTTP.
@@ -236,6 +195,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 - Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
 - Observabilidade (Prometheus + Grafana): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+- Formato das respostas da API: [doc/07-formato-das-respostas-da-api.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/07-formato-das-respostas-da-api.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.
@@ -245,154 +205,27 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Frontend de operação: **implementado** para acionar webhook do Make e iniciar a automação ponta a ponta.
 
 ### Formato das respostas da API
-
-#### 1) Consulta única com sucesso (`200 OK`)
-```json
-{
-  "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-  "data_hora_consulta": "14/03/2026 - 10:30",
-  "pessoa": {
-    "consulta": "04031769644",
-    "nome": "NOME DA PESSOA",
-    "cpf": "***.***.***-**",
-    "localidade": "UF",
-    "quantidade_beneficios": 1,
-    "total_recursos_favorecidos": "R$ 600,00"
-  },
-  "beneficios": [
-    {
-      "tipo": "Auxílio Brasil",
-      "nis": "1234 5678 901",
-      "valor_recebido": "R$ 600,00",
-      "detalhe_href": "/...",
-      "detalhe_evidencia": "<base64>",
-      "parcelas": [
-        {
-          "mes_folha": "01/2024",
-          "mes_referencia": "01/2024",
-          "uf": "SP",
-          "municipio": "São Paulo",
-          "quantidade_dependentes": "0",
-          "valor": "R$ 600,00"
-        }
-      ]
-    }
-  ],
-  "meta": {
-    "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-    "data_hora_consulta": "14/03/2026 - 10:30",
-    "resultados_encontrados": 1,
-    "beneficios_encontrados": [
-      "Auxílio Brasil"
-    ],
-    "panorama_relacao": "<base64>",
-    "total_valor_recebido": 600.0,
-    "total_valor_recebido_formatado": "R$ 600,00"
-  }
-}
-```
-
-#### 2) Consulta única sem resultado (`200 OK` com `status="not_found"`)
-```json
-{
-  "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-  "data_hora_consulta": "14/03/2026 - 10:31",
-  "status": "not_found",
-  "pessoa": {
-    "consulta": "04031769644",
-    "nome": "N/A",
-    "cpf": "N/A",
-    "localidade": "N/A",
-    "total_recursos_favorecidos": "R$ 0,00"
-  },
-  "beneficios": [],
-  "meta": {
-    "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-    "data_hora_consulta": "14/03/2026 - 10:31",
-    "resultados_encontrados": 0,
-    "evidencia_resultados_zero": "<base64>",
-    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
-    "total_valor_recebido": 0.0,
-    "total_valor_recebido_formatado": "R$ 0,00"
-  }
-}
-```
-#### 3) Lote (`200 OK`, `207` ou `502` conforme os itens)
-```json
-{
-  "resultados": [
-    {
-      "consulta": "04031769644",
-      "status": "ok",
-      "resultado": {
-        "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-        "data_hora_consulta": "14/03/2026 - 10:30",
-        "pessoa": {
-          "consulta": "04031769644",
-          "nome": "NOME DA PESSOA",
-          "cpf": "***.***.***-**",
-          "localidade": "UF"
-        },
-        "beneficios": [],
-        "meta": {
-          "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-          "data_hora_consulta": "14/03/2026 - 10:30"
-        }
-      }
-    },
-    {
-      "consulta": "123ABC",
-      "status": "invalid",
-      "resultado": {
-        "status": "invalid",
-        "error": "Entrada inválida: use CPF/NIS com 11 dígitos ou nome válido.",
-        "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-        "data_hora_consulta": "14/03/2026 - 10:32",
-        "pessoa": {
-          "consulta": "123ABC",
-          "nome": "N/A",
-          "cpf": "N/A",
-          "localidade": "N/A"
-        },
-        "meta": {
-          "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-          "data_hora_consulta": "14/03/2026 - 10:32"
-        }
-      }
-    }
-  ]
-}
-```
-#### 4) Erros de protocolo/segurança
-
-| HTTP | Quando acontece | Exemplo |
-|------|------------------|---------|
-| `400` | payload inválido, limite excedido, entrada inválida no single | `{"status":"error","error":"Máximo de 3 consultas por requisição"}` |
-| `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
-| `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
-| `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
-| `500` | falha inesperada no processamento da API | `{"status":"error","error":"<mensagem-interna>"}` |
-| `502` | falha do bot/dependência externa durante a consulta | `{"status":"error","error":"<mensagem-do-bot>"}` |
+- Exemplos completos e contrato detalhado: [doc/07-formato-das-respostas-da-api.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/07-formato-das-respostas-da-api.md)
 
 ## Executar via runner local
-Edite a lista `lista_alvos` em `main.py` e rode:
+Use o runner async em `bot/main.py`:
 ```bash
-python main.py
+python -m bot.main --consulta "04031769644"
 ```
-Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até 3 alvos por execução.
+Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-dev-sem-imagens`).
 
 ## Parâmetros importantes
-- `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
+- `TransparencyBotAsync(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
-- Na API, use apenas o campo `refinar_busca`.
-- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (padrão `3`; em produção, considere `1` se precisar de mais estabilidade do Chromium).
+- Na API, use os campos `refinar_busca` e opcionalmente `incluir_base64`.
+- Na API e no stress runner, o paralelismo padrão por requisição/lote é `1` browser fixo com até `4` consultas por abas (`BOT_MAX_CONSULTAS_POR_BROWSER`), com fila automática para excedentes.
 - Concorrência de requisições HTTP é definida pelo Gunicorn no deploy: por padrão `GUNICORN_WORKERS=1` e `GUNICORN_THREADS=2`, ou seja, **até 2 requisições simultâneas por instância**.
 - Browser/Playwright via `.env`:
   - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
   - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
   - `PLAYWRIGHT_USE_STEALTH_FLAGS`: habilita `--disable-blink-features=AutomationControlled`.
   - `PLAYWRIGHT_HIDE_WEBDRIVER`: aplica override de `navigator.webdriver`.
-  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`Stealth().apply_stealth_sync(page)`).
+  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`await stealth_async(page)`).
   - `PLAYWRIGHT_USER_AGENT`: user-agent customizado; se vazio, usa o default do projeto.
   - `PLAYWRIGHT_SLOW_MO_MS`: delay entre ações (ms), útil para depuração e estabilidade.
 
@@ -406,11 +239,12 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 | `API_MASTER_KEY` | Sim | - | Chave usada para assinar/validar JWT HS256 no fluxo de autenticação. |
 | `ALLOWED_HOSTS` | Sim (produção) | `127.0.0.1,localhost` | Define hosts/domínios permitidos pelo Django. |
 | `DEBUG` | Não | `False` | Liga/desliga modo de depuração do Django. |
-| `API_TOKEN_TTL` | Não | `600` | Tempo de vida do token OAuth (`/api/token/`), em segundos. |
+| `API_TOKEN_TTL` | Não | `600` | Janela de expiração de segurança para token ainda não utilizado (`/api/token/`), em segundos. |
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
-| `BOT_MAX_WORKERS` | Não | `3` | Número máximo de workers no batch da API (`/api/consulta/`). |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | Não | `4` | Número de consultas em paralelo por abas no bot async (browser fixo em 1). |
+| `BOT_INCLUDE_BASE64_DEFAULT` | Não | `true` | Define o default de `incluir_base64` quando o cliente não envia o campo no payload da API. |
 | `GUNICORN_WORKERS` | Não | `1` | Número de processos Gunicorn (concorrência de requisições por instância). |
 | `GUNICORN_THREADS` | Não | `2` | Número de threads por processo Gunicorn (concorrência de requisições por instância). |
 
@@ -452,7 +286,7 @@ Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pyte
 
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
-- Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), reduzindo risco de regressão por intermitência de UI externa.
+- Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), cada uma com seu próprio token de uso único, reduzindo risco de regressão por intermitência de UI externa.
 - Variáveis necessárias:
   - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
   - `E2E_CLIENT_ID`
@@ -470,7 +304,7 @@ E2E_CONSULTA_REFINADA=... \
 E2E_REQUIRE_SUCCESS=true \
 ./venv/bin/pytest -q tests/test_e2e_smoke.py -m e2e
 ```
-- Artefatos são salvos em `output/e2e-artifacts/` (respostas, status HTTP, durações e `junit.xml` no CI).
+- Artefatos são salvos em `output/e2e-artifacts/` (inclui `01_tokens.json`, respostas, status HTTP, durações e `junit.xml` no CI).
 
 ### GitHub Actions (E2E)
 - Workflow: `.github/workflows/e2e-smoke.yml`
@@ -478,15 +312,10 @@ E2E_REQUIRE_SUCCESS=true \
 - Configure os secrets do repositório:
   - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA`.
 
-### Evidência E2E validada
-- Execução pós-deploy aprovada em **14/03/2026** (run `23096919987`): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
-- Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
-- Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
-
-### Evidências de integrações externas
-- Google Sheets (registro da execução): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
-- Google Drive (arquivo gerado): [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
-- Make (workflow/orquestração): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+### Evidências (catálogo único)
+- Catálogo consolidado e atualizado de evidências: [doc/04-status-do-projeto.md (seção "Evidências registradas")](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md).
+- Diretório dos artefatos versionados: [doc/evidencias](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias).
+- Diretório de evidências visuais e demo: [img](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img).
 
 ## Estrutura de saída (resumo)
 - `id_consulta`: UUID da execução (sempre presente).
