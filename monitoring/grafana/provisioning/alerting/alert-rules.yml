@@ -1,0 +1,292 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: most-rpa-api-rules
+    folder: Most RPA Provisioned
+    interval: 1m
+    rules:
+      - uid: most-rpa-api-down
+        title: API Down - most-rpa
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 120
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: max_over_time(up{job="most-rpa-api"}[2m]) or vector(0)
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: classic_conditions
+        dashboardUid: most-rpa-api-overview
+        panelId: 1
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "[CRITICAL] API indisponível - most-rpa-api"
+          description: "A API não respondeu ao scrape do Prometheus nos últimos 2 minutos."
+        labels:
+          severity: critical
+          team: backend
+
+      - uid: most-rpa-http-5xx-high
+        title: HTTP 5xx alto - most-rpa-api
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: sum(rate(django_http_responses_total_by_status_total{job="most-rpa-api",status=~"5.."}[5m])) or vector(0)
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.05
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: classic_conditions
+        dashboardUid: most-rpa-api-overview
+        panelId: 5
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: "[CRITICAL] Taxa de erro 5xx alta"
+          description: "A taxa de respostas HTTP 5xx ficou acima de 0.05 req/s por 5 minutos."
+        labels:
+          severity: critical
+          team: backend
+
+      - uid: most-rpa-latency-p95-high
+        title: Latência p95 alta - most-rpa-api
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: histogram_quantile(0.95, sum(rate(django_http_request_duration_seconds_bucket{job="most-rpa-api"}[5m])) by (le)) or vector(0)
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 3
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: classic_conditions
+        dashboardUid: most-rpa-api-overview
+        panelId: 3
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: "[WARNING] Latência p95 alta"
+          description: "A latência p95 da API ficou acima de 3 segundos por 10 minutos."
+        labels:
+          severity: warning
+          team: backend
+
+      - uid: most-rpa-success-low
+        title: Taxa de sucesso baixa - most-rpa-api
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: ((sum(rate(most_api_consulta_requests_total[10m])) <= bool 0.02) * 1) + ((sum(rate(most_api_consulta_requests_total[10m])) > bool 0.02) * (sum(rate(most_api_consulta_result_kind_total{kind="info"}[10m])) / clamp_min(sum(rate(most_api_consulta_result_kind_total[10m])), 0.000001)))
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.7
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: classic_conditions
+        dashboardUid: most-rpa-api-overview
+        panelId: 2
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: "[WARNING] Taxa de sucesso baixa"
+          description: "A taxa de sucesso funcional ficou abaixo de 70% nos últimos 10 minutos com tráfego mínimo ativo."
+        labels:
+          severity: warning
+          team: backend
+
+      - uid: most-rpa-functional-error-high
+        title: Erro funcional alto - most-rpa-api
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: ((sum(rate(most_api_consulta_requests_total[10m])) <= bool 0.02) * 0) + ((sum(rate(most_api_consulta_requests_total[10m])) > bool 0.02) * (sum(rate(most_api_consulta_item_status_total{status="error"}[10m])) / clamp_min(sum(rate(most_api_consulta_item_status_total[10m])), 0.000001)))
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.2
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: classic_conditions
+        dashboardUid: most-rpa-api-overview
+        panelId: 4
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: "[WARNING] Erro funcional alto"
+          description: "A taxa de itens com status funcional error ficou acima de 20% por 10 minutos."
+        labels:
+          severity: warning
+          team: backend

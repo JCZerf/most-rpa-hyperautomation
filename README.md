@@ -104,6 +104,31 @@ Arquivos principais:
 - `monitoring/grafana/provisioning/dashboards/dashboards.yml`
 - `monitoring/grafana/dashboards/most-rpa-api-overview.json`
 
+## Observabilidade - Alertas Telegram (fase 3)
+Fluxo separado da subida padrão com duas opções:
+- `manual` (recomendado no dia a dia): sem provisionar alertas automaticamente.
+- `automático` (bootstrap): provisiona regras/templates ao subir o Grafana.
+
+Arquivos principais:
+- `monitoring/grafana/provisioning/alerting/alert-rules.yml`
+- `monitoring/grafana/provisioning/alerting/templates.yml`
+- `docker-compose.observability.alerting-bootstrap.yml`
+
+Modo manual (padrão, não recria alertas):
+```bash
+docker compose -f docker-compose.observability.yml up -d
+```
+
+Modo automático (bootstrap de alertas provisionados):
+```bash
+docker compose -f docker-compose.observability.yml -f docker-compose.observability.alerting-bootstrap.yml up -d --force-recreate grafana
+```
+
+Fluxo manual na UI (quando não usar bootstrap):
+1. `Alerting > Alert rules` (criar/importar regras com base em `alert-rules.yml`).
+2. `Alerting > Notification templates` (usar template de `templates.yml`).
+3. Configurar `Contact points` e `Notification policies` manualmente por ambiente.
+
 Guia completo (catálogo de métricas, interpretação e PromQL):  
 [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 

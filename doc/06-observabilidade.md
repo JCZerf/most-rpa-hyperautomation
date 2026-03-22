@@ -11,14 +11,22 @@ Este documento descreve como operar e interpretar as métricas expostas pela API
 - Visualizar as métricas em dashboards legíveis no Grafana.
 - Reduzir dependência de consultas manuais no Prometheus.
 
+## Objetivo da fase 3
+- Alertas automáticos no Grafana com regras versionadas.
+- Template de notificação versionado para reutilizar em Telegram/e-mail.
+- Contact point e policy configurados manualmente na UI.
+
 ## Arquivos da implementação
 - `web/settings.py`: instrumentação do Django (`django_prometheus` app e middlewares).
 - `web/urls.py`: endpoint de métricas (`/metrics`).
 - `docker-compose.observability.yml`: stack local com Prometheus + Grafana.
+- `docker-compose.observability.alerting-bootstrap.yml`: habilita provisioning automático de alertas (opcional).
 - `monitoring/prometheus/prometheus.yml`: configuração de scrape.
 - `monitoring/grafana/provisioning/datasources/prometheus.yml`: datasource provisionado.
 - `monitoring/grafana/provisioning/dashboards/dashboards.yml`: provider de dashboards.
 - `monitoring/grafana/dashboards/most-rpa-api-overview.json`: dashboard inicial.
+- `monitoring/grafana/provisioning/alerting/templates.yml`: template versionado para notificações.
+- `monitoring/grafana/provisioning/alerting/alert-rules.yml`: regras versionadas (referência para import/manual).
 
 ## Subida local (Prometheus + Grafana)
 1. Subir API:
@@ -29,15 +37,31 @@ python manage.py runserver 0.0.0.0:8000
 ```bash
 docker compose -f docker-compose.observability.yml up -d
 ```
-3. Abrir UIs:
+3. Recriar o Grafana após mudanças de configuração:
+```bash
+docker compose -f docker-compose.observability.yml up -d --force-recreate grafana
+```
+4. Opcional: bootstrap automático de alertas versionados:
+```bash
+docker compose -f docker-compose.observability.yml -f docker-compose.observability.alerting-bootstrap.yml up -d --force-recreate grafana
+```
+5. Abrir UIs:
 - Prometheus: `http://127.0.0.1:9090`
 - Grafana: `http://127.0.0.1:3000`
-4. Login padrão Grafana (local):
+6. Login padrão Grafana (local):
 - usuário: `admin`
 - senha: `admin`
-5. Dashboard provisionado:
+7. Dashboard provisionado:
 - pasta: `Most RPA`
 - dashboard: `Most RPA - API Overview`
+8. Observação importante:
+- O compose padrão **não aplica alertas provisionados** automaticamente (modo manual).
+- O compose de bootstrap aplica regras/templates da pasta `monitoring/grafana/provisioning/alerting`.
+9. Configuração manual de alertas e notificação (UI Grafana):
+- criar/importar regras com base no arquivo `monitoring/grafana/provisioning/alerting/alert-rules.yml`
+- criar o contact point (Telegram, e-mail, etc.)
+- criar/ajustar notification policy para rotear os alertas
+- aplicar template `telegram.default` (arquivo `monitoring/grafana/provisioning/alerting/templates.yml`) no canal desejado
 
 ## Catálogo de métricas (atual)
 
@@ -217,5 +241,10 @@ curl -s http://127.0.0.1:8000/metrics | grep '^django_' | head -n 100
 - Em produção, proteger por rede (ingress interno, allowlist, VPC/firewall), sem exposição pública.
 
 
-## Próximas fases
-- Fase 3: Alertmanager + Telegram (alertas acionáveis).
+## Fase 3 - fluxo separado de alertas
+- Template: `telegram.default`.
+- Regras de alerta: versionadas em arquivo (`alert-rules.yml`) para importação manual.
+- Contact points/policies: configuração manual na UI para manter flexibilidade por ambiente.
+- O `docker-compose.observability.yml` não recria alertas a cada subida.
+- Quando desejar criação automática, usar o compose de bootstrap:
+  `docker-compose.observability.alerting-bootstrap.yml`.
