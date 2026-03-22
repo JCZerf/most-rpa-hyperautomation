@@ -11,5 +11,9 @@ Conteudo desta pasta:
 - `e2e-smoke-artifacts/04_resumo_concorrencia.json`
 - `e2e-smoke-artifacts/junit.xml`
 
+Nota de versao:
+- Esta evidencia e historica (14/03/2026), anterior ao ajuste de token de uso unico por chamada concorrente.
+- No estado atual do teste E2E, o artefato equivalente e `01_tokens.json`.
+
 Objetivo:
 - Registrar evidencia da rodada apos evolucao do teste E2E com execucao concorrente.

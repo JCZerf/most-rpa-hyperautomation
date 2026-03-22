@@ -1,22 +1,39 @@
 import json
+import os
 
 import pytest
 from rest_framework.test import APIClient
 
 
+TEST_OAUTH_CLIENT_ID = os.getenv("TEST_OAUTH_CLIENT_ID", "test-client-id")
+TEST_OAUTH_CLIENT_SECRET = os.getenv("TEST_OAUTH_CLIENT_SECRET", "test-client-secret")
+TEST_DJANGO_SECRET_KEY = os.getenv(
+    "TEST_DJANGO_SECRET_KEY",
+    "test-secret-1234567890abcdef1234567890abcdef",
+)
+TEST_API_MASTER_KEY = os.getenv(
+    "TEST_API_MASTER_KEY",
+    "test-master-key-1234567890abcdef1234567890",
+)
+
+
 @pytest.fixture
 def client(settings):
-    settings.OAUTH_CLIENT_ID = "client-id"
-    settings.OAUTH_CLIENT_SECRET = "client-secret"
-    settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
-    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
+    settings.OAUTH_CLIENT_ID = TEST_OAUTH_CLIENT_ID
+    settings.OAUTH_CLIENT_SECRET = TEST_OAUTH_CLIENT_SECRET
+    settings.SECRET_KEY = TEST_DJANGO_SECRET_KEY
+    settings.API_MASTER_KEY = TEST_API_MASTER_KEY
     return APIClient()
 
 
 def test_token_success(client):
     resp = client.post(
         "/api/token/",
-        data={"grant_type": "client_credentials", "client_id": "client-id", "client_secret": "client-secret"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
+        },
         format="json",
     )
     assert resp.status_code == 200
@@ -48,7 +65,11 @@ def test_token_missing_params(client):
 def test_token_invalid_grant(client):
     resp = client.post(
         "/api/token/",
-        data={"grant_type": "password", "client_id": "client-id", "client_secret": "client-secret"},
+        data={
+            "grant_type": "password",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
+        },
         format="json",
     )
     assert resp.status_code == 400
@@ -62,8 +83,8 @@ def test_token_invalid_scope(client):
         "/api/token/",
         data={
             "grant_type": "client_credentials",
-            "client_id": "client-id",
-            "client_secret": "client-secret",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
             "scope": "admin:all",
         },
         format="json",

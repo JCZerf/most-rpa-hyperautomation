@@ -3,6 +3,7 @@ from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
+    path('', include('django_prometheus.urls')),
     path('', RedirectView.as_view(url='/api/docs/', permanent=False), name='home'),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

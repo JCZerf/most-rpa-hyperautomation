@@ -1,3 +1,5 @@
-from .scraper import TransparencyBot
+"""Pacote de refatoracao assíncrona do bot (isolado da aplicacao principal)."""
 
-__all__ = ['TransparencyBot']
+from .scraper import TransparencyBotAsync
+
+__all__ = ["TransparencyBotAsync"]

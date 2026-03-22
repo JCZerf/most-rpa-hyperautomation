@@ -1,0 +1,16 @@
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: telegram.default
+    template: |
+      {{ define "telegram.default" }}
+      {{ range .Alerts }}
+      {{ if eq .Status "firing" }}🔥 *FIRING*{{ else }}✅ *RESOLVED*{{ end }}
+      *Alerta:* {{ .Labels.alertname }}
+      *Resumo:* {{ .Annotations.summary }}
+      {{ if .Annotations.description }}*Descrição:* {{ .Annotations.description }}{{ end }}
+      {{ if .Labels.instance }}*Instância:* {{ .Labels.instance }}{{ end }}
+
+      {{ end }}
+      {{ end }}
