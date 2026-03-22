@@ -3,7 +3,7 @@
 - Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
 
 ## Escolhas confirmadas da implementação atual
-- **Backend e API:** Django/DRF com arquitetura modular (`navigation`, `extraction`, `browser`, `views`, `auth`) para separar responsabilidades e simplificar manutenção.
+- **Backend e API:** Django/DRF com arquitetura modular atualizada por responsabilidades: `api/views.py` (contrato HTTP e roteamento dos modos single/lote), `api/auth.py` (OAuth2 client_credentials + JWT de uso único), `api/metrics.py` (métricas Prometheus), `bot/scraper.py` (fluxo assíncrono ponta a ponta), `bot/orchestrator.py` (concorrência `1 x N` por abas e fila interna), `bot/navigation.py` + `bot/extraction.py` (navegação e parsing), `bot/browser.py` (contexto Playwright) e `bot/validators.py` (validação/normalização de CPF, NIS e nome).
 - **Automação:** Playwright com Chromium em modo headless, mantendo estabilidade operacional para o portal alvo.
 - **Desambiguação por nome com score:** a seleção do resultado usa normalização de nome (acentos/pontuação/artigos), cálculo de score de proximidade e escolha do melhor candidato; fallback para o primeiro resultado quando não há índice válido.
 - **Escopo de benefícios e layouts:** mapeamento focado nos benefícios exigidos no desafio (Auxílio Brasil, Auxílio Emergencial e Bolsa Família). Para cenários fora do recorte, mantém extração de panorama/dados base sem aprofundar extração não essencial.
@@ -19,6 +19,9 @@
 - **Infraestrutura em nuvem:** escolha por Google Cloud Run pela velocidade de entrega, facilidade operacional e créditos gratuitos no contexto do projeto.
 - **Recursos de execução:** perfis leves (ex.: 512MB/1CPU) não suportaram o navegador de forma estável; operação validada entre 2GB e 4GB de RAM com 2 vCPU nos testes.
 - **Hiperautomação (bônus):** fluxo funcional no Make, com gravação de JSON no Drive e registro estruturado no Sheets, priorizando entrega do fluxo ponta a ponta.
+- **Observabilidade (Prometheus + Grafana + Telegram):** adoção de métricas com Prometheus para séries temporais operacionais da API e visualização/alertas no Grafana.
+  - **Motivo do Telegram:** integração nativa e simples para criação de bot/canal de alerta, permitindo receber notificações em poucos minutos com baixa fricção operacional.
+  - **Motivo do Prometheus:** modelo robusto para coleta de métricas temporais (latência, volume, status e comportamento do endpoint), facilitando análise histórica e definição de alertas.
 
 ## Desafios encontrados e mitigação aplicada
 - **Card rotativo na home do portal:** dificultava o clique determinístico no fluxo inicial. Mitigação aplicada com clique forçado e sequência de navegação estabilizada.
@@ -39,14 +42,32 @@
 - **Integrações Make/Drive/Sheets:** implementação inicial foi direta e funcional, porém sem camada completa de regras de negócio por cenário (quando salvar, quando não salvar, validações por ramificação).
 
 ## Evoluções possíveis (fora do escopo atual)
+- **Controle global de token com Redis:** mover o controle de reuso de JWT (`jti`) de memória local para store compartilhado, garantindo unicidade entre múltiplos workers/instâncias.
 - **Navegação por abas adicionais de parcelas:** expandir extração para percorrer abas internas de detalhe quando existirem, cobrindo mais layouts de forma automática.
 - **Expansão de layouts não prioritários:** adicionar parsing dedicado para benefícios/telas não exigidos no recorte original.
 - **Política avançada de persistência no Make:** regras condicionais de gravação em Drive/Sheets, tratamento por tipo de retorno e governança de expurgo/retensão.
 - **Camada anti-bloqueio/WAF mais robusta:** estratégias adicionais de redução de assinatura de automação, controle de ritmo e observabilidade específica de bloqueios.
-- **Right-sizing contínuo:** ajustar CPU/memória com base em métrica de latência, taxa de sucesso e taxa de erro em produção.
 
 ## Referências de evidência
-- Evidências E2E smoke e concorrência: [doc/04-status-do-projeto.md](./04-status-do-projeto.md)
-- Evidência de integração com Google Sheets: [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Consolidado de status/evidências gerais: [doc/04-status-do-projeto.md](./04-status-do-projeto.md)
+- E2E smoke pós-deploy (run `23096919987`) - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
+- E2E smoke pós-deploy - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
+- E2E smoke concorrente local - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
+- E2E smoke concorrente local - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/README.md)
+- E2E smoke manual sucesso - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/e2e-smoke-artifacts)
+- E2E smoke manual sucesso - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
+- Evidência de documentação da API (Swagger + auth): [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/README.md)
+- Evidência visual da documentação API: [tela_doc_api.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/tela_doc_api.png)
+- Evidência visual de geração de token/JWT: [auth_geracao_jwt.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/auth_geracao_jwt.png)
+- Evidências de performance em HML: [observacoes.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/observacoes.md)
+- Evidência visual de performance (busca única): [busca_unica_refine_false.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/busca_unica_refine_false.png)
+- Evidência visual de performance (lote avançado): [busca_em_lote_avançado.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/busca_em_lote_avançado.png)
+- Evidência visual de performance (lote simples + refine): [Lote_simples+refine_true.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/Lote_simples+refine_true.png)
+- Evidência de integração com Google Sheets (v1): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Evidência de integração com Google Sheets (v2): [google_sheets_evidencia_V2.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia_V2.png)
 - Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
-- Evidência do fluxo Make: [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+- Evidência do fluxo Make (módulos): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+- Evidência do fluxo Make (visão geral): [workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/workflow.png)
+- Evidência de observabilidade (dashboard Grafana): [grafana_basic_painel.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/grafana_basic_painel.png)
+- Evidência de observabilidade (alerta Telegram): [telegram-notification-evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/telegram-notification-evidencia.png)
+- Demo de execução async: [demonstração_async.mp4](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/demonstração_async.mp4)

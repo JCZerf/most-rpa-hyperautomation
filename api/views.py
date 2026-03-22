@@ -47,6 +47,13 @@ SWAGGER_EXAMPLE_CONSULTAS = [
     "J QUECEMIRA BATISTA DOS SANTOS",
     "K TIANA MARLEN SILVA ARAUJO",
 ]
+SWAGGER_EXAMPLE_CPF = "04031769644"
+SWAGGER_EXAMPLE_LOTE_4 = [
+    "GAABI OLIVEIRA DE MESQUITA",
+    "HAABE OLIVEIRA DA SILVA",
+    "D ANGELA ALVES DE BARROS FELIPE",
+    "I DINA APARECIDA DA SILVA GARCIA",
+]
 
 
 class ItemConsultaSerializer(serializers.Serializer):
@@ -165,15 +172,13 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
     tags=["Consulta"],
     summary="Executa consulta no Portal da Transparência (única ou lote)",
     description=(
-        "Suporta 3 formatos de payload:\n"
-        "- Consulta unitária simples: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
-        "- Consulta em lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false}\n"
-        "- Consulta em lote avançada: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":true}\n\n"
+        "Suporta payload unitário (`consulta`) e em lote (`consultas`, 1..N), "
+        "com `refinar_busca` e `incluir_base64` opcionais.\n\n"
         "Autenticação obrigatória por requisição: cada token Bearer é de uso único "
         "(a cada consulta, gere um novo token em `/api/token/`).\n\n"
         "Paralelismo padrão: 1 browser, até 4 consultas por abas em paralelo. "
         "Quando excede essa capacidade, os blocos entram em fila interna (sem rejeição por tamanho apenas por volume).\n\n"
-        "Também há exemplos avançados com refinar_busca=true (lote simples).\n\n"
+        "Há exemplos de lote de 4 consultas e lote gigante de 12 consultas sem evidências Base64.\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
         "Use `incluir_base64=false` para remover evidências/imagens da resposta.\n"
         "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
@@ -182,55 +187,57 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
     ),
     examples=[
         OpenApiExample(
-            "Consulta unitária simples",
-            value={"consulta": SWAGGER_EXAMPLE_CONSULTAS[0], "refinar_busca": False},
+            "Consulta unitária simples (CPF)",
+            value={"consulta": SWAGGER_EXAMPLE_CPF, "refinar_busca": False},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Consulta dupla simples",
+            "Consulta unitária simples (nome)",
+            value={"consulta": SWAGGER_EXAMPLE_LOTE_4[0], "refinar_busca": False},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta em lote simples (4 itens)",
             value={
-                "consultas": SWAGGER_EXAMPLE_CONSULTAS[:2],
+                "consultas": SWAGGER_EXAMPLE_LOTE_4,
                 "refinar_busca": False,
             },
-            request_only=True,
-            media_type='application/json',
-        ),
-        OpenApiExample(
-            "Consulta tripla simples",
-            value={
-                "consultas": SWAGGER_EXAMPLE_CONSULTAS[:3],
-                "refinar_busca": False,
-            },
-            request_only=True,
-            media_type='application/json',
-        ),
-        OpenApiExample(
-            "Consulta lote 12 nomes",
-            value={"consultas": SWAGGER_EXAMPLE_CONSULTAS, "refinar_busca": False},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
             "Consulta unitária avançada",
-            value={"consulta": SWAGGER_EXAMPLE_CONSULTAS[3], "refinar_busca": True},
+            value={"consulta": SWAGGER_EXAMPLE_LOTE_4[0], "refinar_busca": True},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Consulta dupla avançada",
+            "Consulta em lote avançada (4 itens)",
             value={
-                "consultas": SWAGGER_EXAMPLE_CONSULTAS[3:5],
+                "consultas": SWAGGER_EXAMPLE_LOTE_4,
                 "refinar_busca": True,
             },
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Consulta tripla avançada",
+            "Consulta em lote gigante (12 itens, sem evidências Base64)",
             value={
-                "consultas": SWAGGER_EXAMPLE_CONSULTAS[3:6],
+                "consultas": SWAGGER_EXAMPLE_CONSULTAS,
                 "refinar_busca": True,
+                "incluir_base64": False,
+            },
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta leve (sem evidências Base64)",
+            value={
+                "consulta": "HAABE OLIVEIRA DA SILVA",
+                "refinar_busca": True,
+                "incluir_base64": False,
             },
             request_only=True,
             media_type='application/json',
