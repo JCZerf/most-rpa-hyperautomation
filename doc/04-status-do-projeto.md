@@ -4,7 +4,7 @@
 
 ## Status por requisito (doc/02)
 
-- Backend Django exposto como API: **feito** (Cloud Run, deploy automático).
+- Backend Django exposto como API: **feito** (Cloud Run, com deploy controlado: manual ou por tag `v*`).
 - Playwright/Chromium para navegação e captura: **feito** (fluxo operacional com tratamento de navegação e extração).
 - Evidência em Base64 na resposta: **feito** (panorama, ausência de benefício e detalhes quando aplicável).
 - Resposta JSON com panorama + benefícios: **feito** para o escopo principal; detalhes completos dependem da estrutura disponível em cada tela do portal.

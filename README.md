@@ -185,6 +185,18 @@ Payloads aceitos:
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
 
+### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
+- Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1 a 3 itens), evitando itens fixos vazios.
+- Exemplo de entrada (1 item): `{"consultas":["04031769644"],"refinar_busca":true}`
+- Exemplo de entrada (3 itens): `{"consultas":["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"],"refinar_busca":true}`
+- Chamada da API: repassar o array `consultas` sem posições fixas para evitar `null` no payload.
+- Pós-processamento: `Parse JSON` -> `Iterator` em `resultados[]` -> `Google Drive` -> `Google Sheets`.
+- Mapeamento após iterator: usar campos do bundle do `Iterator` (ex.: `consulta`, `status`, `resultado.*`), não campos do payload bruto do HTTP.
+- Upload no Drive: gerar 1 arquivo por bundle iterado.
+  - Nome padrão: `[IDENTIFICADOR_UNICO]_[DATA_HORA].json` (ex.: `id_consulta_YYYY-MM-DD_HH-mm-ss.json`).
+  - Conteúdo recomendado: `JSON string` de um `Create JSON` após o iterator (um item por consulta).
+- Resposta final ao cliente: usar `Array Aggregator` antes do `Webhook response` para devolver uma única resposta HTTP com todos os itens processados.
+
 ## Documentação do desafio
 - Contexto: [doc/01-documentação-de-contexto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/01-documentação-de-contexto.md)
 - Requisitos: [doc/02-requisito-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/02-requisito-do-projeto.md)
@@ -453,6 +465,10 @@ E2E_REQUIRE_SUCCESS=true \
 - Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
 - O Portal da Transparência pode acionar challenge/telemetria. Atualmente o projeto não classifica automaticamente como `status="blocked"` para evitar falso positivo.
 - Logs do runner local em `logs/execucao_<timestamp>.log` e logs da API via Django/Cloud Logging.
+- Make (payload): evite array fixo com posições manuais para `consultas`; se houver posições não preenchidas, podem surgir `null` e comportamento inconsistente na consulta única.
+- Make (iterator): após quebrar `resultados[]`, módulos de Drive/Sheets devem mapear a partir do bundle atual do iterator.
+- Make (webhook response): a requisição HTTP aceita uma única resposta; quando houver iterator, agregue os bundles antes de responder.
+- Make (Drive Data): ao usar função de binário, garanta sintaxe válida de encoding; em caso de erro de encoding, mapeie diretamente o `JSON string` validado do item.
 
 ## Segurança
 Uso apenas para fins legais; trate dados pessoais conforme LGPD.
