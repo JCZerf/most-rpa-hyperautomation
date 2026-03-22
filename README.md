@@ -7,6 +7,12 @@ Principais modos de uso:
 - **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
 - **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
+## Links rapidos
+```text
+API (Swagger): https://most-rpa-hyperautomation-2k5peguzzq-ue.a.run.app/api/docs/
+Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
+```
+
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
 - Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
@@ -27,11 +33,14 @@ most-rpa-hyperautomation/
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
 ├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
-├── output/                   # Resultados JSON gerados nas execuções locais
+├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
+├── output/                   # Resultados JSON gerados nas execuções locais (runtime)
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
+├── docker-compose.observability.yml  # Stack local Prometheus + Grafana
+├── docker-compose.bot-stress.yml     # Stress do bot sem API
 ├── example.env               # Template de variáveis de ambiente
 ├── main.py                   # Runner local para execuções em lote
 ├── manage.py                 # Comando de gerenciamento Django
@@ -78,25 +87,52 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
-## Teste de estresse com hardware limitado (2GB RAM / 3 CPU)
-Use o compose dedicado para simular ambiente restrito:
+## Observabilidade - Prometheus (fase 1)
+Implementação base da observabilidade com métricas da API em `GET /metrics` e coleta via Prometheus.
 
+Arquivos principais:
+- `docker-compose.observability.yml`
+- `monitoring/prometheus/prometheus.yml`
+- instrumentação em `web/settings.py` e `web/urls.py`
+
+## Observabilidade - Grafana (fase 2)
+Dashboard visual sobre as métricas do Prometheus, sem depender da leitura direta de PromQL.
+
+Arquivos principais:
+- `docker-compose.observability.yml`
+- `monitoring/grafana/provisioning/datasources/prometheus.yml`
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml`
+- `monitoring/grafana/dashboards/most-rpa-api-overview.json`
+
+## Observabilidade - Alertas Telegram (fase 3)
+Fluxo separado da subida padrão com duas opções:
+- `manual` (recomendado no dia a dia): sem provisionar alertas automaticamente.
+- `automático` (bootstrap): provisiona regras/templates ao subir o Grafana.
+
+Arquivos principais:
+- `monitoring/grafana/provisioning/alerting/alert-rules.yml`
+- `monitoring/grafana/provisioning/alerting/templates.yml`
+- `docker-compose.observability.alerting-bootstrap.yml`
+
+Modo manual (padrão, não recria alertas):
 ```bash
-docker compose -f docker-compose.stress.yml up --build
+docker compose -f docker-compose.observability.yml up -d
 ```
 
-Com o serviço rodando, acompanhe consumo em tempo real:
-
+Modo automático (bootstrap de alertas provisionados):
 ```bash
-docker stats most-rpa-bot-stress
+docker compose -f docker-compose.observability.yml -f docker-compose.observability.alerting-bootstrap.yml up -d --force-recreate grafana
 ```
 
-Para encerrar:
+Fluxo manual na UI (quando não usar bootstrap):
+1. `Alerting > Alert rules` (criar/importar regras com base em `alert-rules.yml`).
+2. `Alerting > Notification templates` (usar template de `templates.yml`).
+3. Configurar `Contact points` e `Notification policies` manualmente por ambiente.
 
-```bash
-docker compose -f docker-compose.stress.yml down
-```
+Guia completo (catálogo de métricas, interpretação e PromQL):  
+[doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 
+## Teste de estresse do bot (2GB RAM / 3 CPU)
 ### Script de monitoramento (CPU/RAM + logs)
 Para automatizar a coleta de metricas e logs durante o teste:
 
@@ -115,14 +151,7 @@ Exemplo com duracao e intervalo customizados:
 DURATION_SECONDS=600 SAMPLE_INTERVAL_SECONDS=1 ./scripts/run_stress_monitor.sh
 ```
 
-Exemplo com carga paralela (fazendo chamadas para API enquanto monitora):
-
-```bash
-STRESS_LOAD_COMMAND='for i in {1..30}; do curl -s http://127.0.0.1:8000/api/docs/ >/dev/null; done' ./scripts/run_stress_monitor.sh
-```
-
-### Teste de estresse do bot sem API (consulta direta)
-Nesse modo, o container executa o bot diretamente (sem Gunicorn/API) e finaliza ao concluir as consultas.
+Teste em modo bot (sem API): o container executa o bot diretamente e finaliza ao concluir as consultas.
 
 Consulta unica (padrao do compose):
 
@@ -179,11 +208,14 @@ python manage.py runserver 8000
 `POST /api/consulta/`
 
 Payloads aceitos:
-- **Consulta única**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Lote simples**: `{"consultas": ["04031769644", "12345678901"], "refinar_busca": false}` (máx. 3 entradas)
-- **Lote avançado**: `{"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": false}]}` (máx. 3 itens; `refinar_busca` padrão = false)
+- **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
+- **Consulta dupla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta tripla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
+- **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
+- **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
 
-Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
+Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Erros de execução retornam `status="error"` com HTTP não-200.
 
 ### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
 - Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1 a 3 itens), evitando itens fixos vazios.
@@ -203,6 +235,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 - Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
+- Observabilidade (Prometheus + Grafana): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.
@@ -259,13 +292,12 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 }
 ```
 
-#### 2) Consulta única sem resultado (`200 OK` com erro de negócio)
+#### 2) Consulta única sem resultado (`200 OK` com `status="not_found"`)
 ```json
 {
   "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
   "data_hora_consulta": "14/03/2026 - 10:31",
-  "status": "error",
-  "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+  "status": "not_found",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "N/A",
@@ -285,7 +317,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
   }
 }
 ```
-#### 3) Lote (`200 OK`)
+#### 3) Lote (`200 OK`, `207` ou `502` conforme os itens)
 ```json
 {
   "resultados": [
@@ -338,7 +370,9 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 | `400` | payload inválido, limite excedido, entrada inválida no single | `{"status":"error","error":"Máximo de 3 consultas por requisição"}` |
 | `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
 | `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
-| `500` | falha inesperada no processamento | `{"status":"error","error":"<mensagem-interna>"}` |
+| `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
+| `500` | falha inesperada no processamento da API | `{"status":"error","error":"<mensagem-interna>"}` |
+| `502` | falha do bot/dependência externa durante a consulta | `{"status":"error","error":"<mensagem-do-bot>"}` |
 
 ## Executar via runner local
 Edite a lista `lista_alvos` em `main.py` e rode:
@@ -351,7 +385,8 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 - `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 - Na API, use apenas o campo `refinar_busca`.
-- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (valor recomendado em produção: `1` para estabilidade do Chromium).
+- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (padrão `3`; em produção, considere `1` se precisar de mais estabilidade do Chromium).
+- Concorrência de requisições HTTP é definida pelo Gunicorn no deploy: por padrão `GUNICORN_WORKERS=1` e `GUNICORN_THREADS=2`, ou seja, **até 2 requisições simultâneas por instância**.
 - Browser/Playwright via `.env`:
   - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
   - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
@@ -375,7 +410,9 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
-| `BOT_MAX_WORKERS` | Não | `1` | Número máximo de workers no batch da API (`/api/consulta/`). |
+| `BOT_MAX_WORKERS` | Não | `3` | Número máximo de workers no batch da API (`/api/consulta/`). |
+| `GUNICORN_WORKERS` | Não | `1` | Número de processos Gunicorn (concorrência de requisições por instância). |
+| `GUNICORN_THREADS` | Não | `2` | Número de threads por processo Gunicorn (concorrência de requisições por instância). |
 
 ### Browser e Playwright
 | Variável | Obrigatória | Valor padrão | Função |

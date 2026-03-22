@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -14,12 +15,21 @@ from bot.scraper import TransparencyBot
 from bot.logging_utils import log_event
 from bot.validators import mascarar_identificador
 from .auth import issue_token, validate_token, scope_allows
+from .metrics import (
+    API_CONSULTA_REQUESTS_TOTAL,
+    API_CONSULTA_BATCH_SIZE,
+    API_CONSULTA_DURATION_SECONDS,
+    API_CONSULTA_ITEM_DURATION_SECONDS,
+    API_CONSULTA_ITEM_STATUS_TOTAL,
+    API_CONSULTA_RESULT_KIND_TOTAL,
+    classify_result_kind,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_BATCH = 3
 try:
-    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "1")))
+    MAX_WORKERS = max(1, int(os.getenv("BOT_MAX_WORKERS", "3")))
 except (TypeError, ValueError):
     MAX_WORKERS = 1
 
@@ -66,7 +76,41 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         return "invalid"
     if res.get("status") == "error":
         return "error"
+    if res.get("status") == "not_found":
+        return "not_found"
     return "ok"
+
+
+def _single_http_status_from_result(res: Dict[str, Any]) -> int:
+    status_item = _status_from_result(res)
+    if status_item == "invalid":
+        return 400
+    if status_item == "error":
+        # Erro de execução do bot/dependência externa (Portal da Transparência)
+        return 502
+    return 200
+
+
+def _batch_http_status(resultados: List[Dict[str, Any]]) -> int:
+    statuses = [str(item.get("status") or "").lower() for item in resultados if isinstance(item, dict)]
+    has_error = any(s == "error" for s in statuses)
+    has_invalid = any(s == "invalid" for s in statuses)
+    has_ok = any(s in {"ok", "not_found"} for s in statuses)
+
+    if has_error and not has_ok and not has_invalid:
+        return 502
+    if has_invalid and not has_ok and not has_error:
+        return 400
+    if has_error or has_invalid:
+        return 207
+    return 200
+
+
+def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -> None:
+    status_norm = str(status_item or "unknown").lower()
+    API_CONSULTA_ITEM_DURATION_SECONDS.labels(mode=mode, status=status_norm).observe(max(0.0, elapsed_seconds))
+    API_CONSULTA_ITEM_STATUS_TOTAL.labels(mode=mode, status=status_norm).inc()
+    API_CONSULTA_RESULT_KIND_TOTAL.labels(mode=mode, kind=classify_result_kind(status_norm)).inc()
 
 
 @extend_schema(
@@ -75,9 +119,10 @@ def _status_from_result(res: Dict[str, Any]) -> str:
     summary="Executa consulta no Portal da Transparência (única ou lote)",
     description=(
         "Suporta 3 formatos de payload:\n"
-        "- Consulta única: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
-        "- Lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
-        "- Lote avançado: {\"itens\":[{\"consulta\":\"...\",\"refinar_busca\":false}, ...]} (máx. 3)\n\n"
+        "- Consulta unitária simples: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
+        "- Consulta dupla simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n"
+        "- Consulta tripla simples: {\"consultas\":[\"...\",\"...\",\"...\"],\"refinar_busca\":false} (máx. 3)\n\n"
+        "Também há exemplos avançados com refinar_busca=true (lote simples).\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
         "Resposta do bot sempre inclui `id_consulta` (UUID) e `data_hora_consulta` "
         "em todas as execuções para auditoria.\n"
@@ -85,20 +130,58 @@ def _status_from_result(res: Dict[str, Any]) -> str:
     ),
     examples=[
         OpenApiExample(
-            "Consulta única",
+            "Consulta unitária simples",
             value={"consulta": "04031769644", "refinar_busca": False},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Lote simples",
-            value={"consultas": ["04031769644", "12345678901"], "refinar_busca": True},
+            "Consulta dupla simples",
+            value={
+                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "refinar_busca": False,
+            },
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
-            "Lote avançado",
-            value={"itens": [{"consulta": "04031769644"}, {"consulta": "12345678901", "refinar_busca": False}]},
+            "Consulta tripla simples",
+            value={
+                "consultas": [
+                    "04031769644",
+                    "A ANNE CHRISTINE SILVA RIBEIRO",
+                    "A LIDA PEREIRA FIALHO",
+                ],
+                "refinar_busca": False,
+            },
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta unitária avançada",
+            value={"consulta": "04031769644", "refinar_busca": True},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta dupla avançada",
+            value={
+                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "refinar_busca": True,
+            },
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
+            "Consulta tripla avançada",
+            value={
+                "consultas": [
+                    "04031769644",
+                    "A ANNE CHRISTINE SILVA RIBEIRO",
+                    "A LIDA PEREIRA FIALHO",
+                ],
+                "refinar_busca": True,
+            },
             request_only=True,
             media_type='application/json',
         ),
@@ -128,12 +211,11 @@ def _status_from_result(res: Dict[str, Any]) -> str:
             media_type='application/json',
         ),
         OpenApiExample(
-            "Resposta: erro de negócio (sem resultado)",
+            "Resposta: sem resultado (não encontrado)",
             value={
                 "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
                 "data_hora_consulta": "15/03/2026 12:46",
-                "status": "error",
-                "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+                "status": "not_found",
                 "pessoa": {
                     "consulta": "04031769644",
                     "nome": "N/A",
@@ -190,12 +272,16 @@ def consulta(request: Request):
     resultados: List[Dict[str, Any]] = []
 
     if 'consultas' in payload and isinstance(payload.get('consultas'), list):
+        request_start = time.monotonic()
+        mode = "batch_consultas"
         consultas = payload.get('consultas', [])
         refine_default = _resolve_refine_flag(payload, default=False)
+        API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
         if len(consultas) == 0:
             return _json_error('Lista "consultas" vazia', 400)
         if len(consultas) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} consultas por requisição", 400)
+        API_CONSULTA_BATCH_SIZE.observe(len(consultas))
         log_event(
             logger,
             logging.INFO,
@@ -206,6 +292,7 @@ def consulta(request: Request):
         workers = min(MAX_WORKERS, len(consultas))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {executor.submit(_run_single, c, refine_default): idx for idx, c in enumerate(consultas)}
+            submit_ts_by_idx = {idx: time.monotonic() for idx in range(len(consultas))}
             resultados = [None] * len(consultas)
             for fut in as_completed(future_map):
                 idx = future_map[fut]
@@ -213,6 +300,7 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     log_event(
                         logger,
                         logging.INFO,
@@ -224,16 +312,22 @@ def consulta(request: Request):
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando consulta %s", c)
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
-        return JsonResponse({"resultados": resultados}, safe=False)
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
+        return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     if 'itens' in payload and isinstance(payload.get('itens'), list):
+        request_start = time.monotonic()
+        mode = "batch_itens"
         itens = payload.get('itens', [])
+        API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
         if len(itens) == 0:
             return _json_error('Lista "itens" vazia', 400)
         if len(itens) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} itens por requisição", 400)
+        API_CONSULTA_BATCH_SIZE.observe(len(itens))
         log_event(
             logger,
             logging.INFO,
@@ -244,14 +338,17 @@ def consulta(request: Request):
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {}
             ordered_inputs = {}
+            submit_ts_by_idx = {}
             resultados = [None] * len(itens)
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
                 refinar_busca = _resolve_refine_flag(item, default=False)
                 if not c:
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=0.0)
                     resultados[idx] = {"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'}
                     continue
                 ordered_inputs[idx] = (c, refinar_busca)
+                submit_ts_by_idx[idx] = time.monotonic()
                 future_map[executor.submit(_run_single, c, refinar_busca)] = idx
 
             for fut in as_completed(future_map):
@@ -260,6 +357,7 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     log_event(
                         logger,
                         logging.INFO,
@@ -271,11 +369,17 @@ def consulta(request: Request):
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando item %s", c)
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
-        return JsonResponse({"resultados": resultados}, safe=False)
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
+        return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     # Single
+    request_start = time.monotonic()
+    mode = "single"
+    API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
+
     consulta_param = payload.get('consulta') or payload.get('alvo')
     refine_param = _resolve_refine_flag(payload, default=False)
 
@@ -290,20 +394,24 @@ def consulta(request: Request):
         refinar_busca=refine_param,
     )
     try:
+        item_start = time.monotonic()
         resultado = _run_single(consulta_param, refine_param)
+        status_item = _status_from_result(resultado)
+        _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - item_start)
         log_event(
             logger,
             logging.INFO,
             "api_consulta_processada",
             consulta=mascarar_identificador(str(consulta_param)),
-            status=_status_from_result(resultado),
+            status=status_item,
             id_consulta=resultado.get("id_consulta", "-"),
         )
-        if resultado.get("status") == "invalid":
-            return JsonResponse(resultado, status=400, safe=False)
-        return JsonResponse(resultado, safe=False)
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
+        return JsonResponse(resultado, safe=False, status=_single_http_status_from_result(resultado))
     except Exception as e:
         logger.exception("Erro processando consulta unica %s", consulta_param)
+        _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - request_start)
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse({"status": "error", "error": str(e)}, status=500)
 
 

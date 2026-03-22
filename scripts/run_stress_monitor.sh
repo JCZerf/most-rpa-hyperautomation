@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.stress.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.bot-stress.yml}"
 SERVICE_NAME="${SERVICE_NAME:-bot-stress}"
 DURATION_SECONDS="${DURATION_SECONDS:-300}"
 SAMPLE_INTERVAL_SECONDS="${SAMPLE_INTERVAL_SECONDS:-2}"

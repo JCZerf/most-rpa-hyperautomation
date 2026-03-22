@@ -63,7 +63,7 @@ def test_consulta_missing_token():
     assert resp.status_code == 401
 
 
-def test_consulta_insufficient_scope(settings):
+def test_consulta_insufficient_scope(settings, monkeypatch):
     settings.OAUTH_CLIENT_ID = "client-id"
     settings.OAUTH_CLIENT_SECRET = "client-secret"
     settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
@@ -72,11 +72,13 @@ def test_consulta_insufficient_scope(settings):
     api_client = APIClient()
     resp_token = api_client.post(
         "/api/token/",
-        data={"grant_type": "client_credentials", "client_id": "client-id", "client_secret": "client-secret", "scope": "read-only"},
+        data={"grant_type": "client_credentials", "client_id": "client-id", "client_secret": "client-secret", "scope": "bot:read"},
         format="json",
     )
+    assert resp_token.status_code == 200
     token = resp_token.json()["access_token"]
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+    monkeypatch.setattr("api.views.scope_allows", lambda claims, required: False)
     resp = api_client.post("/api/consulta/", data={"consulta": "FULANO"}, format="json")
     assert resp.status_code == 403
 
@@ -155,7 +157,7 @@ def test_consulta_batch_marks_error_status_item(client, monkeypatch):
     monkeypatch.setattr("api.views._run_single", fake_run_single)
     payload = {"consultas": ["04031769644"], "refinar_busca": False}
     resp = client.post("/api/consulta/", data=payload, format="json")
-    assert resp.status_code == 200
+    assert resp.status_code == 502
     data = resp.json()
     assert data["resultados"][0]["status"] == "error"
 
@@ -173,7 +175,7 @@ def test_consulta_itens_missing_consulta_preserva_ordem(client, monkeypatch):
         ]
     }
     resp = client.post("/api/consulta/", data=payload, format="json")
-    assert resp.status_code == 200
+    assert resp.status_code == 207
     data = resp.json()
     assert data["resultados"][0]["status"] == "ok"
     assert data["resultados"][0]["consulta"] == "A LIDA PEREIRA FIALHO"
@@ -198,3 +200,44 @@ def test_consulta_single_refinar_busca_string_false(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert calls == [False]
+
+
+def test_consulta_single_error_from_bot_returns_502(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        return {"status": "error", "error": "falha no portal"}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
+    assert resp.status_code == 502
+    data = resp.json()
+    assert data["status"] == "error"
+
+
+def test_consulta_single_not_found_returns_200(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        return {
+            "status": "not_found",
+            "pessoa": {"consulta": consulta_param, "nome": "N/A"},
+            "beneficios": [],
+            "meta": {"resultados_encontrados": 0, "mensagem": "Nenhum encontrado"},
+        }
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "not_found"
+
+
+def test_consulta_batch_partial_success_returns_207(client, monkeypatch):
+    def fake_run_single(consulta_param, refine_param):
+        if consulta_param == "A":
+            return {"status": "ok", "pessoa": {"nome": "A"}, "beneficios": []}
+        return {"status": "error", "error": "falha"}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    payload = {"consultas": ["A", "B"], "refinar_busca": False}
+    resp = client.post("/api/consulta/", data=payload, format="json")
+    assert resp.status_code == 207
+    data = resp.json()
+    assert {item["status"] for item in data["resultados"]} == {"ok", "error"}

@@ -14,6 +14,7 @@ OAUTH_CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
 OAUTH_AUDIENCE = os.getenv('OAUTH_AUDIENCE', 'most-rpa-api')
 
 INSTALLED_APPS = [
+    'django_prometheus',
     'django.contrib.staticfiles',
     'django.contrib.contenttypes',
     'django.contrib.auth',
@@ -70,9 +71,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'web.urls'

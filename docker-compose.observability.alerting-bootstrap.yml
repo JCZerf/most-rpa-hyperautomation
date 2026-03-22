@@ -1,0 +1,4 @@
+services:
+  grafana:
+    volumes:
+      - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
