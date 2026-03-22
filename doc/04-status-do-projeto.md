@@ -1,8 +1,3 @@
-## Atalhos rápidos
-- Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
-- Autenticação e JWT (referência única): [README - Autenticação OAuth2/JWT](../README.md#auth-reference)
-- Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
-
 ## Status por requisito (doc/02)
 
 - Backend Django exposto como API: **feito** (Cloud Run, com deploy controlado: manual ou automático por tag `v*`).
@@ -13,7 +8,7 @@
 - Observabilidade de métricas (RF-12): **feito em ambiente local** com endpoint `/metrics`, coleta Prometheus e dashboard Grafana.
 - Notificação de alerta (RF-13): **feito em ambiente local** com regra no Grafana enviando alerta para Telegram.
 - Escopo de observabilidade em cloud: **não aplicado nesta fase** por decisão de custo/benefício no contexto de desafio; stack validada localmente.
-- Autenticação OAuth2/JWT de uso único por requisição: **feito** (detalhes centralizados em [README - Autenticação OAuth2/JWT](../README.md#auth-reference)).
+- Autenticação OAuth2/JWT de uso único por requisição: **feito**.
 - Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, `API_TOKEN_TTL` de segurança): **feito**.
 - Integração contínua com GitHub Actions: **feito** (workflows versionados para validação/smoke).
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
@@ -59,7 +54,7 @@
 - Metadados da rodada manual atualizada: [README da evidência manual](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
 - Evidências de desempenho em homologação (14/03/2026 19h): [performance-hml](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h)
 - Evidências da documentação interativa e autenticação: [api-docs](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h)
-- Benchmarks de concorrencia (22/03/2026): [doc/05-parametros-do-teste-de-estresse.md](./05-parametros-do-teste-de-estresse.md)
+- Benchmarks de concorrencia (22/03/2026): registrados nos artefatos e no documento de parâmetros de estresse.
 - Evidência de integração com Google Sheets: [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
 - Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
 - Evidência do fluxo no Make: [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)

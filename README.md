@@ -4,21 +4,25 @@ Automação RPA/hiperautomação em Python que consulta o Portal da Transparênc
 
 Principais modos de uso:
 - **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
-- **Runner local async**: script `bot/main.py` para execuções em lote gravando resultados em `output/`.
-- **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
+- **Runner local async**: script `bot/main.py` para execuções unitárias ou em lote, gravando resultados em `output/`.
+- **Hiperautomação (Make + Frontend externo)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
-## Links rapidos
+## Links rapidos (homologacao)
 ```text
 API (Swagger): https://most-rpa-hyperautomation-2k5peguzzq-ue.a.run.app/api/docs/
 Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 ```
+> Observacao: os links acima referenciam o ambiente de homologacao utilizado no projeto/desafio.
 
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
-- Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
-- Bot core async em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
-- `bot/main.py` para executar múltiplos alvos em paralelo e salvar JSONs em `output/`.
-- GitHub Actions para integração contínua (testes/smoke) e entrega contínua controlada no Cloud Run.
+- Django + Django REST Framework + drf-spectacular para API REST e documentação OpenAPI/Swagger (`/api/docs/`).
+- Autenticação OAuth2 `client_credentials` + JWT HS256 de uso único por consulta (`api/auth.py`).
+- Bot assíncrono em `bot/scraper.py`, com navegação em `bot/navigation.py`, extração em `bot/extraction.py` e validação em `bot/validators.py`.
+- Orquestração de concorrência/fila em `bot/orchestrator.py` (browser fixo em `1` e paralelismo por abas).
+- Runner local em `bot/main.py` e runner de stress em `scripts/run_bot_batch.py`.
+- Observabilidade com `django-prometheus`, Prometheus e Grafana (alertas Telegram validados em ambiente local).
+- GitHub Actions para CI (testes/smoke/E2E) e CD controlado no Cloud Run.
 
 ## Integração contínua e entrega
 - **CI (integração contínua):** workflows no GitHub Actions para validações e smoke test (`.github/workflows/e2e-smoke.yml`).
@@ -27,6 +31,7 @@ Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 - **Sem deploy automático por commit/merge em branch**.
 
 ## Estrutura do projeto
+Itens versionados no repositório:
 ```text
 most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
@@ -34,44 +39,59 @@ most-rpa-hyperautomation/
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
 ├── img/                      # Evidências visuais (integrações, observabilidade e demo)
 ├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
-├── output/                   # Resultados JSON gerados nas execuções locais (runtime)
+├── scripts/                  # Scripts auxiliares (stress monitor e batch runner)
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
 ├── docker-compose.observability.yml  # Stack local Prometheus + Grafana
+├── docker-compose.observability.alerting-bootstrap.yml  # Bootstrap opcional de alertas Grafana
 ├── docker-compose.bot-stress.yml     # Stress do bot sem API
 ├── .env.example              # Template alternativo de variáveis de ambiente
 ├── manage.py                 # Comando de gerenciamento Django
 ├── requirements.txt          # Dependências Python
-├── README.md                 # Guia de uso e operação
-└── logs/                     # Logs locais por execução do runner (gerado em runtime)
+└── README.md                 # Guia de uso e operação
 ```
+
+Itens locais (ignorados no Git) usados em runtime:
+- `bot_sync_v1/` (legado local)
+- `output/` (resultados gerados)
+- `logs/` (logs de execução/stress)
+- `.env` e arquivos `*.env` (segredos/configuração local)
 
 ## Fluxo da API
 ```mermaid
-flowchart LR
+flowchart TD
     A[Cliente/API Consumer] --> B[POST /api/token]
-    B --> C[JWT Bearer]
-    C --> D[POST /api/consulta]
-    D --> E[Validação e Autorização]
-    E --> F[Bot Playwright]
-    F --> G[Portal da Transparência]
-    G --> H[Extração de panorama e benefícios]
-    H --> I[Evidências em Base64]
-    I --> J[Resposta JSON]
-    J --> A
+    B --> C[Access token JWT Bearer uso único]
+    C --> D[POST /api/consulta com Authorization Bearer]
+    D --> E[Validação de token assinatura escopo e consumo único]
+    E --> F[Validação de payload]
+    F --> G{Modo da requisição}
+    G --> H[Single consulta]
+    G --> I[Lote consultas ou itens]
+    I --> J[Orquestrador async 1 browser fixo abas paralelas e fila]
+    H --> K[Execução do bot async]
+    J --> K
+    K --> L[Playwright no Portal da Transparência extração de dados]
+    L --> M{incluir_base64}
+    M -->|true| N[Anexa evidências em Base64]
+    M -->|false| O[Retorno leve sem imagens]
+    N --> P[Resposta JSON]
+    O --> P
+    P --> A
 ```
 
 ## Requisitos
-- Python 3.10+ (testado em Linux)
-- `pip install -r requirements.txt`
+- Python 3.10+ (recomendado 3.12, alinhado com Docker e CI)
+- `pip` e `venv` para instalação das dependências Python
 - Browsers do Playwright instalados: `playwright install`  
   (em Linux headless pode precisar de libs do Chromium: `libnss3`, `libatk1.0-0`, `libgtk-3-0`, etc.)
+- Docker e Docker Compose (opcional, para execução containerizada, observabilidade e stress test)
 
 ## Instalação rápida
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install
@@ -86,109 +106,28 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
-## Observabilidade - Prometheus (fase 1)
-Implementação base da observabilidade com métricas da API em `GET /metrics` e coleta via Prometheus.
-
-Arquivos principais:
-- `docker-compose.observability.yml`
-- `monitoring/prometheus/prometheus.yml`
-- instrumentação em `web/settings.py` e `web/urls.py`
-
-## Observabilidade - Grafana (fase 2)
-Dashboard visual sobre as métricas do Prometheus, sem depender da leitura direta de PromQL.
-
-Arquivos principais:
-- `docker-compose.observability.yml`
-- `monitoring/grafana/provisioning/datasources/prometheus.yml`
-- `monitoring/grafana/provisioning/dashboards/dashboards.yml`
-- `monitoring/grafana/dashboards/most-rpa-api-overview.json`
-
-## Observabilidade - Alertas Telegram (fase 3)
-Fluxo separado da subida padrão com duas opções:
-- `manual` (recomendado no dia a dia): sem provisionar alertas automaticamente.
-- `automático` (bootstrap): provisiona regras/templates ao subir o Grafana.
-
-Arquivos principais:
-- `monitoring/grafana/provisioning/alerting/alert-rules.yml`
-- `monitoring/grafana/provisioning/alerting/templates.yml`
-- `docker-compose.observability.alerting-bootstrap.yml`
-
-Modo manual (padrão, não recria alertas):
+## Observabilidade (resumo)
+- Stack local: Prometheus + Grafana, com alertas via Telegram no Grafana.
+- Métricas da API em `GET /metrics` e dashboard provisionado em `monitoring/grafana/dashboards/most-rpa-api-overview.json`.
+- Subida rápida (manual):
 ```bash
 docker compose -f docker-compose.observability.yml up -d
 ```
-
-Modo automático (bootstrap de alertas provisionados):
+- Bootstrap opcional de alertas:
 ```bash
 docker compose -f docker-compose.observability.yml -f docker-compose.observability.alerting-bootstrap.yml up -d --force-recreate grafana
 ```
+- Detalhes completos (arquitetura, métricas, PromQL e operação): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+- Nota de escopo: no contexto do desafio, a stack de observabilidade foi validada localmente e não mantida em cloud por custo.
 
-Fluxo manual na UI (quando não usar bootstrap):
-1. `Alerting > Alert rules` (criar/importar regras com base em `alert-rules.yml`).
-2. `Alerting > Notification templates` (usar template de `templates.yml`).
-3. Configurar `Contact points` e `Notification policies` manualmente por ambiente.
-
-Guia completo (catálogo de métricas, interpretação e PromQL):  
-[doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
-
-## Teste de estresse do bot (2GB RAM / 3 CPU)
-### Script de monitoramento (CPU/RAM + logs)
-Para automatizar a coleta de metricas e logs durante o teste:
-
-```bash
-./scripts/run_stress_monitor.sh
-```
-
-Arquivos gerados por execucao:
-- `logs/stress/<timestamp>/docker_stats.csv` (amostras de CPU/RAM)
-- `logs/stress/<timestamp>/container.log` (logs do bot)
-- `logs/stress/<timestamp>/meta.txt` (metadados da execucao)
-
-Exemplo com duracao e intervalo customizados:
-
-```bash
-DURATION_SECONDS=600 SAMPLE_INTERVAL_SECONDS=1 ./scripts/run_stress_monitor.sh
-```
-
-Teste em modo bot (sem API): o container executa o bot diretamente e finaliza ao concluir as consultas.
-
-Consulta unica (padrao do compose):
-
+## Teste de estresse do bot (resumo)
+- Ambiente de referência dos benchmarks: **2 GB RAM / 3 CPU** (container).
+- Execução padrão:
 ```bash
 COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 ```
-
-Consulta unica customizada:
-
-```bash
-BOT_CONSULTA='04031769644' COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
-```
-
-Lote de consultas (com fila quando exceder a capacidade paralela):
-
-```bash
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
-
-Configuração padrão do modo async (1 browser fixo x 4 abas simultâneas):
-
-```bash
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
-BOT_MAX_CONSULTAS_POR_BROWSER=4 \
-BOT_REFINAR_BUSCA=false \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
-
-```bash
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
-BOT_MAX_CONSULTAS_POR_BROWSER=4 \
-BOT_REFINAR_BUSCA=true \
-COMPOSE_FILE=docker-compose.bot-stress.yml \
-./scripts/run_stress_monitor.sh
-```
+- Artefatos gerados por execução: `docker_stats.csv`, `container.log` e `meta.txt` em `logs/stress/<benchmark>/<timestamp>/`.
+- Detalhes completos (parâmetros, cenários e histórico de benchmark): [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
 
 ## Executar como API (Django)
 ```bash
@@ -256,6 +195,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 - Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
 - Observabilidade (Prometheus + Grafana): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+- Formato das respostas da API: [doc/07-formato-das-respostas-da-api.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/07-formato-das-respostas-da-api.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.
@@ -265,134 +205,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Frontend de operação: **implementado** para acionar webhook do Make e iniciar a automação ponta a ponta.
 
 ### Formato das respostas da API
-
-#### 1) Consulta única com sucesso (`200 OK`)
-```json
-{
-  "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-  "data_hora_consulta": "14/03/2026 - 10:30",
-  "pessoa": {
-    "consulta": "04031769644",
-    "nome": "NOME DA PESSOA",
-    "cpf": "***.***.***-**",
-    "localidade": "UF",
-    "quantidade_beneficios": 1,
-    "total_recursos_favorecidos": "R$ 600,00"
-  },
-  "beneficios": [
-    {
-      "tipo": "Auxílio Brasil",
-      "nis": "1234 5678 901",
-      "valor_recebido": "R$ 600,00",
-      "detalhe_href": "/...",
-      "detalhe_evidencia": "<base64>",
-      "parcelas": [
-        {
-          "mes_folha": "01/2024",
-          "mes_referencia": "01/2024",
-          "uf": "SP",
-          "municipio": "São Paulo",
-          "quantidade_dependentes": "0",
-          "valor": "R$ 600,00"
-        }
-      ]
-    }
-  ],
-  "meta": {
-    "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-    "data_hora_consulta": "14/03/2026 - 10:30",
-    "resultados_encontrados": 1,
-    "beneficios_encontrados": [
-      "Auxílio Brasil"
-    ],
-    "panorama_relacao": "<base64>",
-    "total_valor_recebido": 600.0,
-    "total_valor_recebido_formatado": "R$ 600,00"
-  }
-}
-```
-
-#### 2) Consulta única sem resultado (`200 OK` com `status="not_found"`)
-```json
-{
-  "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-  "data_hora_consulta": "14/03/2026 - 10:31",
-  "status": "not_found",
-  "pessoa": {
-    "consulta": "04031769644",
-    "nome": "N/A",
-    "cpf": "N/A",
-    "localidade": "N/A",
-    "total_recursos_favorecidos": "R$ 0,00"
-  },
-  "beneficios": [],
-  "meta": {
-    "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
-    "data_hora_consulta": "14/03/2026 - 10:31",
-    "resultados_encontrados": 0,
-    "evidencia_resultados_zero": "<base64>",
-    "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
-    "total_valor_recebido": 0.0,
-    "total_valor_recebido_formatado": "R$ 0,00"
-  }
-}
-```
-#### 3) Lote (`200 OK`, `207` ou `502` conforme os itens)
-```json
-{
-  "resultados": [
-    {
-      "consulta": "04031769644",
-      "status": "ok",
-      "resultado": {
-        "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-        "data_hora_consulta": "14/03/2026 - 10:30",
-        "pessoa": {
-          "consulta": "04031769644",
-          "nome": "NOME DA PESSOA",
-          "cpf": "***.***.***-**",
-          "localidade": "UF"
-        },
-        "beneficios": [],
-        "meta": {
-          "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
-          "data_hora_consulta": "14/03/2026 - 10:30"
-        }
-      }
-    },
-    {
-      "consulta": "123ABC",
-      "status": "invalid",
-      "resultado": {
-        "status": "invalid",
-        "error": "Entrada inválida: use CPF/NIS com 11 dígitos ou nome válido.",
-        "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-        "data_hora_consulta": "14/03/2026 - 10:32",
-        "pessoa": {
-          "consulta": "123ABC",
-          "nome": "N/A",
-          "cpf": "N/A",
-          "localidade": "N/A"
-        },
-        "meta": {
-          "id_consulta": "cbef5981-1c2a-4a9b-a6f4-5a5347dff67d",
-          "data_hora_consulta": "14/03/2026 - 10:32"
-        }
-      }
-    }
-  ]
-}
-```
-#### 4) Erros de protocolo/segurança
-
-| HTTP | Quando acontece | Exemplo |
-|------|------------------|---------|
-| `400` | payload inválido, lista vazia, entrada inválida no single | `{"status":"error","error":"Lista \"consultas\" vazia"}` |
-| `401` | sem token, token inválido/expirado ou token reutilizado | `{"status":"error","error":"Invalid or expired token"}` |
-| `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
-| `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
-| `500` | falha inesperada no processamento da API | `{"status":"error","error":"<mensagem-interna>"}` |
-| `502` | falha do bot/dependência externa durante a consulta | `{"status":"error","error":"<mensagem-do-bot>"}` |
+- Exemplos completos e contrato detalhado: [doc/07-formato-das-respostas-da-api.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/07-formato-das-respostas-da-api.md)
 
 ## Executar via runner local
 Use o runner async em `bot/main.py`:

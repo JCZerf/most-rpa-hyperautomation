@@ -80,7 +80,6 @@ Nota de escopo de infraestrutura (desafio):
 
 ## Decisões de implementação deste projeto
 - Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada e **uso único por consulta**.
-- Referência única de implementação/uso da autenticação: [README - Autenticação OAuth2/JWT](../README.md#auth-reference).
-- Configuração por variáveis de ambiente para API e bot, com descrição funcional centralizada no [README (Referência de variáveis de ambiente)](../README.md#env-reference).
+- Configuração por variáveis de ambiente para API e bot, com descrição funcional centralizada na documentação principal do projeto.
 - Batch com fila interna para excedentes; paralelismo operacional configurável por ambiente via `BOT_MAX_CONSULTAS_POR_BROWSER` (browser fixo em 1).
 - Nome de campo de API padronizado para `refinar_busca` (campo único aceito para refinamento).
