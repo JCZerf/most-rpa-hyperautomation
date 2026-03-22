@@ -29,7 +29,8 @@
 - Sem intervenção manual durante a execução normal; falhas devem ser sinalizadas via log/retorno.
 - A automação depende da disponibilidade e layout do Portal da Transparência; mudanças podem exigir atualização de seletores.
 - O uso de dados pessoais deve seguir políticas internas e LGPD (armazenamento transitório, mínimo necessário).
-- Limite de 3 entradas por requisição (batch) e até 3 execuções paralelas para evitar sobrecarga (configurável via `BOT_MAX_WORKERS`).
+- Sem limite fixo de 3 entradas por requisição (batch): o processamento usa fila interna quando o volume excede o paralelismo configurado.
+- Paralelismo padrão do bot async: `2` browsers em paralelo e até `4` consultas por browser (configurável via `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`).
 - Validação prévia de CPF/NIS/nomes; entradas inválidas são rejeitadas sem abrir navegador; logs mascaram identificadores.
 
 ## Diretrizes de qualidade da entrega
@@ -56,21 +57,20 @@
 - **Consulta única sem resultado de negócio (`200`)**: retorna `status="error"`, `error`, `beneficios=[]` e `meta` com evidência em Base64.
 - **Lote (`200`)**: retorna `resultados[]`, cada item com `consulta`, `status` (`ok`, `invalid` ou `error`) e `resultado`/`error`.
 - **Erros de protocolo/autenticação**:
-  - `400`: payload inválido, entrada inválida ou limite excedido.
+  - `400`: payload inválido, lista vazia ou entrada inválida.
   - `401`: token ausente, inválido ou expirado.
   - `403`: escopo insuficiente.
   - `500`: falha inesperada no processamento.
 
 ## Exemplos de payload (consulta)
 - **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta dupla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}` (máx. 3 entradas)
-- **Consulta tripla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta em lote simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}`
 - **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
-- **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
+- **Consulta em lote avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}`
+- **Consulta leve (sem evidências Base64)**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
 
 ## Decisões de implementação deste projeto
 - Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada.
 - Configuração por variáveis de ambiente para API e bot, com descrição funcional centralizada no [README (Referência de variáveis de ambiente)](../README.md#env-reference).
-- Batch com até 3 entradas por requisição; paralelismo operacional configurável por ambiente via `BOT_MAX_WORKERS` (reduza para `1` em produção se precisar de mais estabilidade).
+- Batch com fila interna para excedentes; paralelismo operacional configurável por ambiente via `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`.
 - Nome de campo de API padronizado para `refinar_busca` (campo único aceito para refinamento).

@@ -181,6 +181,20 @@ class TransparencyBotAsync:
             data_hora_consulta,
         )
 
+    async def _executar_fluxo_com_auditoria(
+        self,
+        context: Any,
+        page: Any,
+        *,
+        id_consulta: str,
+        data_hora_consulta: str,
+    ) -> Dict[str, Any]:
+        try:
+            payload = await self._executar_fluxo(context, page)
+            return self._com_auditoria(payload, id_consulta, data_hora_consulta)
+        except Exception as erro:
+            return self._resposta_erro_execucao(erro, id_consulta, data_hora_consulta)
+
     async def run_with_page_async(self, context: Any, page: Any) -> Dict[str, Any]:
         id_consulta = str(uuid4())
         data_hora_consulta = self._agora_consulta()
@@ -191,37 +205,53 @@ class TransparencyBotAsync:
             if not ok:
                 return self._com_auditoria(erro_validacao, id_consulta, data_hora_consulta)
 
-            try:
-                payload = await self._executar_fluxo(context, page)
-                return self._com_auditoria(payload, id_consulta, data_hora_consulta)
-            except Exception as erro:
-                return self._resposta_erro_execucao(erro, id_consulta, data_hora_consulta)
+            return await self._executar_fluxo_com_auditoria(
+                context,
+                page,
+                id_consulta=id_consulta,
+                data_hora_consulta=data_hora_consulta,
+            )
         finally:
             reset_id_consulta(token_id)
 
     async def run_async(self) -> Dict[str, Any]:
-        async with async_playwright() as pw:
-            perfil_escolhido = get_random_profile()
-            log_event(logger, logging.INFO, "perfil_carregado", nome_perfil=perfil_escolhido["name"])
-            browser, context, page = await create_browser_context_async(
-                pw,
-                headless=self.headless,
-                user_agent=perfil_escolhido["user_agent"],
-                viewport=perfil_escolhido["viewport"],
-                locale=perfil_escolhido["locale"],
-                timezone_id=perfil_escolhido["timezone_id"],
-            )
+        id_consulta = str(uuid4())
+        data_hora_consulta = self._agora_consulta()
+        token_id = bind_id_consulta(id_consulta)
+        try:
+            ok, erro_validacao = self._validar_entrada()
+            if not ok:
+                return self._com_auditoria(erro_validacao, id_consulta, data_hora_consulta)
 
-            try:
-                return await self.run_with_page_async(context, page)
-            finally:
+            async with async_playwright() as pw:
+                perfil_escolhido = get_random_profile()
+                log_event(logger, logging.INFO, "perfil_carregado", nome_perfil=perfil_escolhido["name"])
+                browser, context, page = await create_browser_context_async(
+                    pw,
+                    headless=self.headless,
+                    user_agent=perfil_escolhido["user_agent"],
+                    viewport=perfil_escolhido["viewport"],
+                    locale=perfil_escolhido["locale"],
+                    timezone_id=perfil_escolhido["timezone_id"],
+                )
+
                 try:
-                    if context:
-                        await context.close()
-                except Exception:
-                    logger.debug("Falha ao fechar context", exc_info=True)
-                try:
-                    if browser:
-                        await browser.close()
-                except Exception:
-                    logger.debug("Falha ao fechar browser", exc_info=True)
+                    return await self._executar_fluxo_com_auditoria(
+                        context,
+                        page,
+                        id_consulta=id_consulta,
+                        data_hora_consulta=data_hora_consulta,
+                    )
+                finally:
+                    try:
+                        if context:
+                            await context.close()
+                    except Exception:
+                        logger.debug("Falha ao fechar context", exc_info=True)
+                    try:
+                        if browser:
+                            await browser.close()
+                    except Exception:
+                        logger.debug("Falha ao fechar browser", exc_info=True)
+        finally:
+            reset_id_consulta(token_id)

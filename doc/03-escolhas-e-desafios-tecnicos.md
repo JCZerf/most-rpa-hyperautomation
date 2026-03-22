@@ -10,6 +10,10 @@
 - **Escopo de parcelas em detalhe:** a extração atual trabalha com a tabela detalhada visível/compatível na página de detalhe, sem navegação ampla por abas internas adicionais, como estratégia de desempenho e simplicidade para o escopo.
 - **Autenticação da API:** OAuth2 client_credentials com JWT HS256, chave dedicada (`API_MASTER_KEY`) e TTL padrão de 10 minutos (`API_TOKEN_TTL=600`).
 - **Parâmetro de refinamento:** padronização para `refinar_busca` como campo oficial e único da API.
+- **Migração de motor de execução (sync -> async):** a aplicação passou a operar exclusivamente com o bot assíncrono, sem fallback para o modo síncrono.
+- **Modelo de concorrência do bot async:** padrão operacional de `2` browsers paralelos com até `4` consultas simultâneas por browser (configurável por `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`).
+- **Fila interna de consultas:** quando o lote excede a capacidade paralela (`2 x 4` por padrão), os blocos excedentes entram em fila e são processados assim que houver slot livre, evitando rejeição apenas por volume.
+- **Resposta com/sem Base64:** inclusão de `incluir_base64` na API para permitir payload leve (sem evidências/imagens) quando o consumidor não precisa dos anexos.
 - **Infraestrutura em nuvem:** escolha por Google Cloud Run pela velocidade de entrega, facilidade operacional e créditos gratuitos no contexto do projeto.
 - **Recursos de execução:** perfis leves (ex.: 512MB/1CPU) não suportaram o navegador de forma estável; operação validada entre 2GB e 4GB de RAM com 2 vCPU nos testes.
 - **Hiperautomação (bônus):** fluxo funcional no Make, com gravação de JSON no Drive e registro estruturado no Sheets, priorizando entrega do fluxo ponta a ponta.
@@ -26,6 +30,8 @@
   - Evidência empírica da fase de testes: cerca de 500 solicitações ao longo de aproximadamente 8 horas antes de bloqueio geral.
   - Situação atual: mitigado parcialmente com tuning de browser/contexto, porém o tratamento definitivo de bloqueio permanece como frente de evolução.
 - **Limitação de infraestrutura gratuita:** ambiente com 512MB/1CPU não sustentou execução estável do Playwright; decisão operacional foi usar perfil superior no Google Cloud.
+- **Sobrecarga do modelo síncrono legado:** o padrão antigo (1 consulta por browser, até 3 simultâneas) aumentava consumo de CPU/RAM e limitava escalabilidade de raspagem.
+  - Mitigação aplicada: adoção de multiplexação assíncrona por abas no mesmo browser/contexto, reduzindo custo por consulta e aumentando throughput.
 - **Integrações Make/Drive/Sheets:** implementação inicial foi direta e funcional, porém sem camada completa de regras de negócio por cenário (quando salvar, quando não salvar, validações por ramificação).
 
 ## Evoluções possíveis (fora do escopo atual)

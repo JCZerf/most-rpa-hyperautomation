@@ -5,11 +5,11 @@ Data de referencia desta configuracao: **21/03/2026**.
 
 ## Regra de precedencia de parametros
 Nos testes com Docker Compose, o valor efetivo pode vir de:
-1. variavel passada no comando (ex.: `BOT_MAX_WORKERS=1 ...`);
+1. variavel passada no comando (ex.: `BOT_MAX_BROWSERS=2 BOT_MAX_CONSULTAS_POR_BROWSER=4 ...`);
 2. arquivo `.env` do projeto;
 3. default definido no compose (`${VAR:-default}`).
 
-Exemplo atual do projeto: `.env` possui `BOT_MAX_WORKERS=3`, portanto esse tende a ser o valor efetivo quando nao sobrescrito no comando.
+Exemplo atual do projeto: `.env` possui `BOT_MAX_BROWSERS=2` e `BOT_MAX_CONSULTAS_POR_BROWSER=4`, portanto esses tendem a ser os valores efetivos quando nao sobrescritos.
 
 ## Escopo dos testes disponiveis (estado real)
 - Ambiente de execucao: container Docker com limite de **3 CPU** e **2 GB RAM**.
@@ -39,7 +39,8 @@ Fontes:
 
 | Parametro | Valor atual | Impacto na metrica |
 |---|---:|---|
-| `BOT_MAX_WORKERS` | `1` | Limita paralelismo interno do bot por execucao em lote. |
+| `BOT_MAX_BROWSERS` | `2` | Limita quantos browsers rodam em paralelo no lote. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Limita quantas consultas paralelas rodam por browser. |
 | `BOT_HEADLESS` | `true` | Execucao sem interface grafica. |
 | `PYTHONPATH` | `/app` | Garante importacao dos modulos do projeto no container. |
 
@@ -64,10 +65,12 @@ Fontes:
 | Parametro | Default atual | Impacto |
 |---|---:|---|
 | `BOT_CONSULTA` | `04031769644` | Consulta unica padrao quando `BOT_CONSULTAS_JSON` nao for informado. |
-| `BOT_CONSULTAS_JSON` | vazio | Lista de consultas (JSON) para lote, maximo 3. |
+| `BOT_CONSULTAS_JSON` | vazio | Lista de consultas (JSON) para lote (1..N). |
 | `BOT_REFINAR_BUSCA` | `true` | Ativa/desativa fluxo refinado do bot. |
 | `BOT_HEADLESS` | `true` | Execucao sem interface grafica. |
-| `BOT_MAX_WORKERS` | `1` | Paralelismo de execucao no lote (ate quantidade de consultas). |
+| `BOT_INCLUIR_BASE64` | `false` | Remove evidencias Base64 no retorno do stress runner quando `false`. |
+| `BOT_MAX_BROWSERS` | `2` | Quantidade de browsers paralelos no lote. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Quantidade de consultas paralelas por browser. |
 | `BOT_OUTPUT_DIR` | `output/stress-bot` | JSON consolidado de resultado do lote. |
 | `BOT_PLAYWRIGHT_SLOW_MO_MS` | `20` | Delay entre acoes do navegador no modo stress sem API. |
 | `BOT_PLAYWRIGHT_BLOCK_RESOURCE_TYPES` | `font,media` | Bloqueia recursos pesados por tipo sem impactar imagens/evidencias por padrao. |
@@ -87,7 +90,8 @@ COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 Exemplo (bot direto, 3 consultas):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_WORKERS=3 \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -96,7 +100,8 @@ Exemplo (3 consultas simultaneas, `refinar_busca=false`):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
 BOT_REFINAR_BUSCA=false \
-BOT_MAX_WORKERS=3 \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -105,7 +110,8 @@ Exemplo (3 consultas simultaneas, `refinar_busca=true`):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
 BOT_REFINAR_BUSCA=true \
-BOT_MAX_WORKERS=3 \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -117,7 +123,8 @@ Executar em duas etapas com a mesma consulta, mudando apenas `BOT_REFINAR_BUSCA`
 ```bash
 BOT_CONSULTA='04031769644' \
 BOT_REFINAR_BUSCA=false \
-BOT_MAX_WORKERS=1 \
+BOT_MAX_BROWSERS=1 \
+BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -126,7 +133,8 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 ```bash
 BOT_CONSULTA='04031769644' \
 BOT_REFINAR_BUSCA=true \
-BOT_MAX_WORKERS=1 \
+BOT_MAX_BROWSERS=1 \
+BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -148,7 +156,7 @@ Artefatos de extracao do bot (modo sem API), persistidos no host:
 - `output/stress-bot/item_<n>_<consulta>_<run_id>.json`: resultado individual por consulta.
 
 Organizacao por consulta no JSON consolidado:
-- campo `demarcacao_consultas`: lista com marcacao explicita (`consulta_1`, `consulta_2`, `consulta_3`), status, auditoria e arquivo individual.
+- campo `demarcacao_consultas`: lista com marcacao explicita (`consulta_1`, `consulta_2`, ...), status, auditoria e arquivo individual.
 - campo `resultados`: mantido para compatibilidade, agora com `consulta_ordem` em cada item.
 - layout interno de `resultado.pessoa`/`resultado.beneficios` nao e alterado.
 
