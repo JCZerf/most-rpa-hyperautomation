@@ -56,3 +56,6 @@ db.sqlite3
 logs/
 logs/stress/
 logs/stress-bot/
+
+# Legacy sync bot (mantido apenas localmente)
+bot_sync_v1/

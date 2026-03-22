@@ -6,9 +6,9 @@ from typing import Any, Dict, List
 
 from playwright.async_api import async_playwright
 
-from bot_refactor.browser import create_browser_context_async
-from bot_refactor.identity import get_random_profile
-from bot_refactor.scraper import TransparencyBotAsync
+from bot.browser import create_browser_context_async
+from bot.identity import get_random_profile
+from bot.scraper import TransparencyBotAsync
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
