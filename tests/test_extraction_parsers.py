@@ -1,4 +1,6 @@
-from bot_sync_v1.extraction import (
+import asyncio
+
+from bot.extraction import (
     _detectar_verificacao_humana,
     _parse_linha_disponibilizado,
     _parse_linha_generica,
@@ -45,10 +47,10 @@ def test_parse_linhas_insuficientes_retorna_none():
 
 def test_detectar_verificacao_humana():
     class FakePage:
-        def title(self):
+        async def title(self):
             return "Human Verification"
 
-        def inner_text(self, *_args, **_kwargs):
+        async def inner_text(self, *_args, **_kwargs):
             return "Vamos confirmar que você é humano"
 
-    assert _detectar_verificacao_humana(FakePage()) is True
+    assert asyncio.run(_detectar_verificacao_humana(FakePage())) is True

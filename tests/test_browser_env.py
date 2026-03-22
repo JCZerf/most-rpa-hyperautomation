@@ -1,14 +1,14 @@
-import os
+import asyncio
 
-from bot_sync_v1.browser import create_browser_context
-from bot_sync_v1.scraper import TransparencyBot
+from bot.browser import create_browser_context_async
+from bot.scraper import TransparencyBotAsync
 
 
 class FakePage:
     def __init__(self):
         self.init_scripts = []
 
-    def add_init_script(self, script):
+    async def add_init_script(self, script):
         self.init_scripts.append(script)
 
 
@@ -18,14 +18,14 @@ class FakeContext:
         self.page = FakePage()
         self.route_calls = []
 
-    def new_page(self):
+    async def new_page(self):
         self.new_page_calls += 1
         return self.page
 
-    def route(self, pattern, handler):
+    async def route(self, pattern, handler):
         self.route_calls.append((pattern, handler))
 
-    def close(self):
+    async def close(self):
         return None
 
 
@@ -34,11 +34,11 @@ class FakeBrowser:
         self.new_context_kwargs = None
         self.context = FakeContext()
 
-    def new_context(self, **kwargs):
+    async def new_context(self, **kwargs):
         self.new_context_kwargs = kwargs
         return self.context
 
-    def close(self):
+    async def close(self):
         return None
 
 
@@ -47,7 +47,7 @@ class FakeChromium:
         self.launch_kwargs = None
         self.browser = FakeBrowser()
 
-    def launch(self, **kwargs):
+    async def launch(self, **kwargs):
         self.launch_kwargs = kwargs
         return self.browser
 
@@ -66,13 +66,15 @@ def test_create_browser_context_defaults(monkeypatch):
     monkeypatch.delenv("PLAYWRIGHT_BLOCK_RESOURCE_TYPES", raising=False)
 
     pw = FakePlaywright()
-    browser, context, page = create_browser_context(
-        pw,
-        headless=True,
-        user_agent="",
-        viewport={"width": 1280, "height": 720},
-        locale="pt-BR",
-        timezone_id="America/Sao_Paulo",
+    browser, context, page = asyncio.run(
+        create_browser_context_async(
+            pw,
+            headless=True,
+            user_agent="",
+            viewport={"width": 1280, "height": 720},
+            locale="pt-BR",
+            timezone_id="America/Sao_Paulo",
+        )
     )
 
     assert browser is pw.chromium.browser
@@ -101,13 +103,15 @@ def test_create_browser_context_respects_env_flags(monkeypatch, tmp_path):
     monkeypatch.setenv("PLAYWRIGHT_BLOCK_RESOURCE_TYPES", "font,media")
 
     pw = FakePlaywright()
-    browser, context, page = create_browser_context(
-        pw,
-        headless=False,
-        user_agent="UA-Teste",
-        viewport={"width": 1200, "height": 700},
-        locale="pt-BR",
-        timezone_id="America/Sao_Paulo",
+    browser, context, page = asyncio.run(
+        create_browser_context_async(
+            pw,
+            headless=False,
+            user_agent="UA-Teste",
+            viewport={"width": 1200, "height": 700},
+            locale="pt-BR",
+            timezone_id="America/Sao_Paulo",
+        )
     )
 
     assert browser is pw.chromium.browser
@@ -129,13 +133,15 @@ def test_create_browser_context_ignores_missing_storage_state(monkeypatch):
     monkeypatch.setenv("PLAYWRIGHT_HIDE_WEBDRIVER", "false")
 
     pw = FakePlaywright()
-    browser, _, _ = create_browser_context(
-        pw,
-        headless=True,
-        user_agent="",
-        viewport={"width": 1000, "height": 700},
-        locale="pt-BR",
-        timezone_id="America/Sao_Paulo",
+    browser, _, _ = asyncio.run(
+        create_browser_context_async(
+            pw,
+            headless=True,
+            user_agent="",
+            viewport={"width": 1000, "height": 700},
+            locale="pt-BR",
+            timezone_id="America/Sao_Paulo",
+        )
     )
 
     assert "storage_state" not in browser.new_context_kwargs
@@ -144,71 +150,61 @@ def test_create_browser_context_ignores_missing_storage_state(monkeypatch):
 
 
 class DummyBrowser:
-    def close(self):
+    async def close(self):
         return None
 
 
 class DummyContext:
-    def close(self):
+    async def close(self):
         return None
 
 
-class DummyLocator:
-    @property
-    def first(self):
-        return self
-
-    def wait_for(self, *args, **kwargs):
-        return None
-
-    def click(self, *args, **kwargs):
-        return None
-
-    def scroll_into_view_if_needed(self):
-        return None
-
-    def dispatch_event(self, *args, **kwargs):
-        return None
+class DummyPage:
+    pass
 
 
-class DummyPage(DummyLocator):
-    def get_by_role(self, *args, **kwargs):
-        return DummyLocator()
+class DummyAsyncPW:
+    async def __aenter__(self):
+        return object()
 
-    def locator(self, *args, **kwargs):
-        return DummyLocator()
-
-
-class DummyPW:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
+    async def __aexit__(self, exc_type, exc, tb):
         return False
 
 
-def test_scraper_passes_user_agent_from_env(monkeypatch):
+def test_scraper_usa_user_agent_do_perfil(monkeypatch):
     captured = {}
 
-    def fake_create_browser_context(pw, **kwargs):
+    async def fake_create_browser_context_async(pw, **kwargs):
         captured.update(kwargs)
         return DummyBrowser(), DummyContext(), DummyPage()
 
-    def fake_search(page, url_base, alvo, usar_refine):
+    async def fake_fluxo_auditado(self, context, page, *, id_consulta, data_hora_consulta):
         return {
-            "zero": True,
-            "evidencia_base64": "abc",
-            "data_consulta": "01/01/2026",
-            "hora_consulta": "12:00",
-            "mensagem": "Foram encontrados 0 resultados",
+            "status": "not_found",
+            "id_consulta": id_consulta,
+            "data_hora_consulta": data_hora_consulta,
+            "pessoa": {"consulta": self.alvo, "nome": "N/A", "cpf": "N/A", "localidade": "N/A"},
+            "beneficios": [],
+            "meta": {"id_consulta": id_consulta, "data_hora_consulta": data_hora_consulta, "resultados_encontrados": 0},
         }
 
-    monkeypatch.setenv("PLAYWRIGHT_USER_AGENT", "UA-via-env")
-    monkeypatch.setattr("bot.scraper.sync_playwright", lambda: DummyPW())
-    monkeypatch.setattr("bot.scraper.create_browser_context", fake_create_browser_context)
-    monkeypatch.setattr("bot.scraper.perform_search", fake_search)
+    monkeypatch.setattr("bot.scraper.async_playwright", lambda: DummyAsyncPW())
+    monkeypatch.setattr("bot.scraper.create_browser_context_async", fake_create_browser_context_async)
+    monkeypatch.setattr(
+        "bot.scraper.get_random_profile",
+        lambda: {
+            "name": "perfil-teste",
+            "user_agent": "UA-via-profile",
+            "viewport": {"width": 1366, "height": 768},
+            "locale": "pt-BR",
+            "timezone_id": "America/Sao_Paulo",
+        },
+    )
+    monkeypatch.setattr(TransparencyBotAsync, "_executar_fluxo_com_auditoria", fake_fluxo_auditado)
 
-    bot = TransparencyBot(headless=True, alvo="FULANO TESTE")
-    bot.run()
+    bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
+    result = asyncio.run(bot.run_async())
 
-    assert captured["user_agent"] == "UA-via-env"
+    assert captured["user_agent"] == "UA-via-profile"
+    assert captured["viewport"] == {"width": 1366, "height": 768}
+    assert result["status"] == "not_found"
