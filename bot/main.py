@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Dict, List
 
 from playwright.async_api import async_playwright
@@ -62,8 +63,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limite-consultas-por-browser",
         type=int,
-        default=4,
+        default=int(os.getenv("BOT_MAX_CONSULTAS_POR_BROWSER", "4")),
         help="Quantidade máxima de consultas por browser/página antes de rotacionar (padrão: 4).",
+    )
+    parser.add_argument(
+        "--max-browsers",
+        type=int,
+        default=int(os.getenv("BOT_MAX_BROWSERS", "2")),
+        help="Quantidade máxima de browsers em paralelo (padrão: 2).",
     )
     parser.add_argument(
         "--modo-dev-sem-imagens",
@@ -257,34 +264,44 @@ async def _run() -> int:
     limite = int(args.limite_consultas_por_browser)
     if limite <= 0:
         raise ValueError("--limite-consultas-por-browser deve ser maior que zero.")
+    max_browsers = int(args.max_browsers)
+    if max_browsers <= 0:
+        raise ValueError("--max-browsers deve ser maior que zero.")
 
     headless = not args.headed
     usar_refine = args.refinar_busca
     blocos = list(_chunked(consultas, limite))
 
     logger.info(
-        "Iniciando execução isolada do refactor: total_consultas=%s, limite_por_browser=%s, browsers_previstos=%s, headless=%s, refinar_busca=%s",
+        "Iniciando execução async: total_consultas=%s, limite_por_browser=%s, browsers_previstos=%s, max_browsers_paralelos=%s, headless=%s, refinar_busca=%s",
         len(consultas),
         limite,
         len(blocos),
+        max_browsers,
         headless,
         usar_refine,
     )
 
     resultados: List[Dict[str, Any]] = []
     async with async_playwright() as pw:
+        sem = asyncio.Semaphore(max_browsers)
+
+        async def executar_bloco_com_fila(indice_browser: int, bloco: List[str]) -> List[Dict[str, Any]]:
+            async with sem:
+                return await _executar_bloco_no_browser(
+                    pw,
+                    bloco,
+                    indice_browser=indice_browser,
+                    limite_consultas_por_browser=limite,
+                    headless=headless,
+                    usar_refine=usar_refine,
+                )
+
         tarefas_browsers = []
         for indice_browser, bloco in enumerate(blocos, start=1):
             tarefas_browsers.append(
                 asyncio.create_task(
-                    _executar_bloco_no_browser(
-                        pw,
-                        bloco,
-                        indice_browser=indice_browser,
-                        limite_consultas_por_browser=limite,
-                        headless=headless,
-                        usar_refine=usar_refine,
-                    )
+                    executar_bloco_com_fila(indice_browser, bloco)
                 )
             )
 
@@ -306,6 +323,7 @@ async def _run() -> int:
                 "total_consultas": len(consultas),
                 "limite_consultas_por_browser": limite,
                 "browsers_utilizados": len(blocos),
+                "max_browsers_paralelos": max_browsers,
                 "modo_dev_sem_imagens": args.modo_dev_sem_imagens,
             },
         }

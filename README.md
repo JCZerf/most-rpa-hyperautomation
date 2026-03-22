@@ -4,7 +4,7 @@ Automação RPA/hiperautomação em Python que consulta o Portal da Transparênc
 
 Principais modos de uso:
 - **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
-- **Runner local**: script `main.py` para execuções em lote gravando resultados em `output/`.
+- **Runner local async**: script `bot/main.py` para execuções em lote gravando resultados em `output/`.
 - **Hiperautomação (Make + Frontend)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
 ## Links rapidos
@@ -16,8 +16,8 @@ Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 ## Stack e componentes
 - Playwright (Python) para navegação e scraping.
 - Django + Django REST Framework + drf-spectacular para expor o robô como API e documentação Swagger (`/api/docs/`).
-- Bot core em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
-- `main.py` para executar múltiplos alvos em paralelo (ThreadPoolExecutor) e salvar JSONs em `output/`.
+- Bot core async em `bot/scraper.py` (usa `bot/navigation.py` e `bot/extraction.py`).
+- `bot/main.py` para executar múltiplos alvos em paralelo e salvar JSONs em `output/`.
 - GitHub Actions para integração contínua (testes/smoke) e entrega contínua controlada no Cloud Run.
 
 ## Integração contínua e entrega
@@ -41,8 +41,7 @@ most-rpa-hyperautomation/
 ├── Dockerfile                # Build da imagem com dependências do Playwright
 ├── docker-compose.observability.yml  # Stack local Prometheus + Grafana
 ├── docker-compose.bot-stress.yml     # Stress do bot sem API
-├── example.env               # Template de variáveis de ambiente
-├── main.py                   # Runner local para execuções em lote
+├── .env.example              # Template alternativo de variáveis de ambiente
 ├── manage.py                 # Comando de gerenciamento Django
 ├── requirements.txt          # Dependências Python
 ├── README.md                 # Guia de uso e operação
@@ -76,7 +75,7 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install
-cp example.env .env   # ajuste os valores reais
+cp .env.example .env   # ajuste os valores reais
 ```
 > Em produção (Cloud Run ou similar), ajuste `ALLOWED_HOSTS` para incluir o domínio do serviço (ex.: `*.run.app`).
 
@@ -165,7 +164,7 @@ Consulta unica customizada:
 BOT_CONSULTA='04031769644' COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 ```
 
-Lote de consultas (maximo 3):
+Lote de consultas (com fila quando exceder a capacidade paralela):
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
@@ -173,11 +172,12 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
 
-Cenario validado de estabilidade (3 simultaneas, sem API):
+Configuração padrão do modo async (2 browsers x 4 consultas por browser):
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_WORKERS=3 \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=false \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -185,7 +185,8 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_WORKERS=3 \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=true \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -209,16 +210,20 @@ python manage.py runserver 8000
 
 Payloads aceitos:
 - **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta dupla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}` (máx. 3 entradas)
-- **Consulta tripla simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": false}` (máx. 3 entradas)
+- **Consulta em lote simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}`
 - **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
-- **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
+- **Consulta em lote avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}`
+- **Flag opcional de resposta leve**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
+
+Paralelismo padrão do bot async por requisição:
+- até `2` browsers em paralelo (`BOT_MAX_BROWSERS`)
+- até `4` consultas em paralelo por browser (`BOT_MAX_CONSULTAS_POR_BROWSER`)
+- excedentes entram em fila automática no mesmo request.
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Erros de execução retornam `status="error"` com HTTP não-200.
 
 ### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
-- Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1 a 3 itens), evitando itens fixos vazios.
+- Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1..N itens), evitando itens fixos vazios.
 - Exemplo de entrada (1 item): `{"consultas":["04031769644"],"refinar_busca":true}`
 - Exemplo de entrada (3 itens): `{"consultas":["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"],"refinar_busca":true}`
 - Chamada da API: repassar o array `consultas` sem posições fixas para evitar `null` no payload.
@@ -367,7 +372,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 
 | HTTP | Quando acontece | Exemplo |
 |------|------------------|---------|
-| `400` | payload inválido, limite excedido, entrada inválida no single | `{"status":"error","error":"Máximo de 3 consultas por requisição"}` |
+| `400` | payload inválido, lista vazia, entrada inválida no single | `{"status":"error","error":"Lista \"consultas\" vazia"}` |
 | `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
 | `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
 | `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
@@ -375,24 +380,24 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 | `502` | falha do bot/dependência externa durante a consulta | `{"status":"error","error":"<mensagem-do-bot>"}` |
 
 ## Executar via runner local
-Edite a lista `lista_alvos` em `main.py` e rode:
+Use o runner async em `bot/main.py`:
 ```bash
-python main.py
+python -m bot.main --consulta "04031769644"
 ```
-Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até 3 alvos por execução.
+Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-dev-sem-imagens`).
 
 ## Parâmetros importantes
-- `TransparencyBot(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
+- `TransparencyBotAsync(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
-- Na API, use apenas o campo `refinar_busca`.
-- Na API, o paralelismo por requisição é configurável por `BOT_MAX_WORKERS` (padrão `3`; em produção, considere `1` se precisar de mais estabilidade do Chromium).
+- Na API, use os campos `refinar_busca` e opcionalmente `incluir_base64`.
+- Na API e no stress runner, o paralelismo padrão por requisição/lote é `2` browsers x `4` consultas por browser (`BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`), com fila automática para excedentes.
 - Concorrência de requisições HTTP é definida pelo Gunicorn no deploy: por padrão `GUNICORN_WORKERS=1` e `GUNICORN_THREADS=2`, ou seja, **até 2 requisições simultâneas por instância**.
 - Browser/Playwright via `.env`:
   - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
   - `PLAYWRIGHT_STORAGE_STATE_PATH`: caminho opcional de `storage_state.json` (vazio = não reutiliza sessão).
   - `PLAYWRIGHT_USE_STEALTH_FLAGS`: habilita `--disable-blink-features=AutomationControlled`.
   - `PLAYWRIGHT_HIDE_WEBDRIVER`: aplica override de `navigator.webdriver`.
-  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`Stealth().apply_stealth_sync(page)`).
+  - `PLAYWRIGHT_USE_STEALTH_PACKAGE`: habilita `playwright-stealth` (`await stealth_async(page)`).
   - `PLAYWRIGHT_USER_AGENT`: user-agent customizado; se vazio, usa o default do projeto.
   - `PLAYWRIGHT_SLOW_MO_MS`: delay entre ações (ms), útil para depuração e estabilidade.
 
@@ -410,7 +415,9 @@ Cada alvo gera um `output/result_<alvo>_<timestamp>.json`. Limite sugerido: até
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
-| `BOT_MAX_WORKERS` | Não | `3` | Número máximo de workers no batch da API (`/api/consulta/`). |
+| `BOT_MAX_BROWSERS` | Não | `2` | Número de browsers paralelos por execução/lote no bot async. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | Não | `4` | Número de consultas em paralelo por browser no bot async. |
+| `BOT_INCLUDE_BASE64_DEFAULT` | Não | `true` | Define o default de `incluir_base64` quando o cliente não envia o campo no payload da API. |
 | `GUNICORN_WORKERS` | Não | `1` | Número de processos Gunicorn (concorrência de requisições por instância). |
 | `GUNICORN_THREADS` | Não | `2` | Número de threads por processo Gunicorn (concorrência de requisições por instância). |
 
