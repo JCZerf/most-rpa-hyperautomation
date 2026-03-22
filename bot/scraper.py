@@ -84,8 +84,7 @@ class TransparencyBot:
     def _resposta_sem_resultado(self, search_result: Dict[str, Any]) -> Dict[str, Any]:
         log_event(logger, logging.INFO, "consulta_sem_resultado", alvo=self.alvo)
         return {
-            "status": "error",
-            "error": search_result.get("mensagem"),
+            "status": "not_found",
             "pessoa": {"consulta": self.alvo, "nome": "N/A", "cpf": "N/A", "localidade": "N/A"},
             "beneficios": [],
             "meta": {

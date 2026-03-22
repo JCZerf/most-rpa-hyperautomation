@@ -8,3 +8,4 @@ PyJWT>=2.8.0
 pytest>=8.2.0
 pytest-django>=4.8.0
 gunicorn>=22.0.0
+django-prometheus>=2.3.1

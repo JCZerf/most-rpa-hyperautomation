@@ -66,7 +66,34 @@ def _status_from_result(res: Dict[str, Any]) -> str:
         return "invalid"
     if res.get("status") == "error":
         return "error"
+    if res.get("status") == "not_found":
+        return "not_found"
     return "ok"
+
+
+def _single_http_status_from_result(res: Dict[str, Any]) -> int:
+    status_item = _status_from_result(res)
+    if status_item == "invalid":
+        return 400
+    if status_item == "error":
+        # Erro de execução do bot/dependência externa (Portal da Transparência)
+        return 502
+    return 200
+
+
+def _batch_http_status(resultados: List[Dict[str, Any]]) -> int:
+    statuses = [str(item.get("status") or "").lower() for item in resultados if isinstance(item, dict)]
+    has_error = any(s == "error" for s in statuses)
+    has_invalid = any(s == "invalid" for s in statuses)
+    has_ok = any(s in {"ok", "not_found"} for s in statuses)
+
+    if has_error and not has_ok and not has_invalid:
+        return 502
+    if has_invalid and not has_ok and not has_error:
+        return 400
+    if has_error or has_invalid:
+        return 207
+    return 200
 
 
 @extend_schema(
@@ -167,12 +194,11 @@ def _status_from_result(res: Dict[str, Any]) -> str:
             media_type='application/json',
         ),
         OpenApiExample(
-            "Resposta: erro de negócio (sem resultado)",
+            "Resposta: sem resultado (não encontrado)",
             value={
                 "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
                 "data_hora_consulta": "15/03/2026 12:46",
-                "status": "error",
-                "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+                "status": "not_found",
                 "pessoa": {
                     "consulta": "04031769644",
                     "nome": "N/A",
@@ -265,7 +291,7 @@ def consulta(request: Request):
                     logger.exception("Erro processando consulta %s", c)
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
-        return JsonResponse({"resultados": resultados}, safe=False)
+        return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     if 'itens' in payload and isinstance(payload.get('itens'), list):
         itens = payload.get('itens', [])
@@ -312,7 +338,7 @@ def consulta(request: Request):
                     logger.exception("Erro processando item %s", c)
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
-        return JsonResponse({"resultados": resultados}, safe=False)
+        return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     # Single
     consulta_param = payload.get('consulta') or payload.get('alvo')
@@ -338,9 +364,7 @@ def consulta(request: Request):
             status=_status_from_result(resultado),
             id_consulta=resultado.get("id_consulta", "-"),
         )
-        if resultado.get("status") == "invalid":
-            return JsonResponse(resultado, status=400, safe=False)
-        return JsonResponse(resultado, safe=False)
+        return JsonResponse(resultado, safe=False, status=_single_http_status_from_result(resultado))
     except Exception as e:
         logger.exception("Erro processando consulta unica %s", consulta_param)
         return JsonResponse({"status": "error", "error": str(e)}, status=500)

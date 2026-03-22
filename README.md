@@ -84,6 +84,17 @@ docker run --env-file .env -p 8000:8000 most-rpa
 ```
 Swagger: `http://127.0.0.1:8000/api/docs/`
 
+## Observabilidade - Prometheus (fase 1)
+Implementação base da observabilidade com métricas da API em `GET /metrics` e coleta via Prometheus.
+
+Arquivos principais:
+- `docker-compose.prometheus.yml`
+- `monitoring/prometheus/prometheus.yml`
+- instrumentação em `web/settings.py` e `web/urls.py`
+
+Guia completo (catálogo de métricas, interpretação e PromQL):  
+[doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+
 ## Teste de estresse com hardware limitado (2GB RAM / 3 CPU)
 Use o compose dedicado para simular ambiente restrito:
 
@@ -192,7 +203,7 @@ Payloads aceitos:
 - **Consulta dupla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}` (máx. 3 entradas)
 - **Consulta tripla avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO", "A LIDA PEREIRA FIALHO"], "refinar_busca": true}` (máx. 3 entradas)
 
-Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Em caso de erro, retorna `{ "status": "error", "error": "..." }`.
+Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Erros de execução retornam `status="error"` com HTTP não-200.
 
 ### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
 - Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1 a 3 itens), evitando itens fixos vazios.
@@ -212,6 +223,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 - Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
+- Observabilidade (Prometheus): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.
@@ -268,13 +280,12 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 }
 ```
 
-#### 2) Consulta única sem resultado (`200 OK` com erro de negócio)
+#### 2) Consulta única sem resultado (`200 OK` com `status="not_found"`)
 ```json
 {
   "id_consulta": "67df0b30-d289-4f91-9ff3-1577ec67b4b3",
   "data_hora_consulta": "14/03/2026 - 10:31",
-  "status": "error",
-  "error": "Não foi possível retornar os dados no tempo de resposta solicitado",
+  "status": "not_found",
   "pessoa": {
     "consulta": "04031769644",
     "nome": "N/A",
@@ -294,7 +305,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
   }
 }
 ```
-#### 3) Lote (`200 OK`)
+#### 3) Lote (`200 OK`, `207` ou `502` conforme os itens)
 ```json
 {
   "resultados": [
@@ -347,7 +358,9 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 | `400` | payload inválido, limite excedido, entrada inválida no single | `{"status":"error","error":"Máximo de 3 consultas por requisição"}` |
 | `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
 | `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
-| `500` | falha inesperada no processamento | `{"status":"error","error":"<mensagem-interna>"}` |
+| `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
+| `500` | falha inesperada no processamento da API | `{"status":"error","error":"<mensagem-interna>"}` |
+| `502` | falha do bot/dependência externa durante a consulta | `{"status":"error","error":"<mensagem-do-bot>"}` |
 
 ## Executar via runner local
 Edite a lista `lista_alvos` em `main.py` e rode:

@@ -49,7 +49,7 @@ def _require_success_enabled() -> bool:
 
 
 def _assert_consulta_contract(status_code: int, body: dict):
-    assert status_code in (200, 400, 401, 403, 500)
+    assert status_code in (200, 207, 400, 401, 403, 500, 502)
     assert isinstance(body, dict)
 
     if status_code == 200:
