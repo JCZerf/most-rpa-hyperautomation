@@ -1,7 +1,7 @@
 import logging
 import types
 
-import main
+import bot_sync_v1.main as main
 
 
 def test_anexar_tempo_execucao_dict():

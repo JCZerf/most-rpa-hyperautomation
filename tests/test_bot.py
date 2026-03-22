@@ -1,6 +1,6 @@
 import pytest
 
-from bot.scraper import TransparencyBot
+from bot_sync_v1.scraper import TransparencyBot
 
 
 class DummyBrowser:

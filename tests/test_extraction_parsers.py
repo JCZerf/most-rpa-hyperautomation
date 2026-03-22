@@ -1,4 +1,4 @@
-from bot.extraction import (
+from bot_sync_v1.extraction import (
     _detectar_verificacao_humana,
     _parse_linha_disponibilizado,
     _parse_linha_generica,

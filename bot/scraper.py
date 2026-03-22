@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
 
-from .identity import get_random_profile
+from bot.identity import get_random_profile
 
 from .browser import create_browser_context_async
 from .extraction import extract_benefits_async, extract_personal_info_async

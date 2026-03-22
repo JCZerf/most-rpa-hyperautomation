@@ -31,7 +31,7 @@ def test_consulta_single_ok(client):
     # Mock para não abrir navegador
     def fake_run(self):
         return {"status": "ok", "pessoa": {"nome": "Teste"}, "beneficios": []}
-    from bot import scraper
+    from bot_sync_v1 import scraper
     original_run = scraper.TransparencyBot.run
     scraper.TransparencyBot.run = fake_run
 

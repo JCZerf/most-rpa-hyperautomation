@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import asyncio
 import json
 import logging
 import os
@@ -9,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bot.scraper import TransparencyBotAsync
+from bot_sync_v1.scraper import TransparencyBot
 
 MAX_ALVOS = 3
 
@@ -68,8 +67,8 @@ def _slug_consulta(valor: str) -> str:
 
 def _run_single(consulta: str, headless: bool, refinar_busca: bool) -> dict[str, Any]:
     started = time.perf_counter()
-    bot = TransparencyBotAsync(headless=headless, alvo=consulta, usar_refine=refinar_busca)
-    result = asyncio.run(bot.run_async())
+    bot = TransparencyBot(headless=headless, alvo=consulta, usar_refine=refinar_busca)
+    result = bot.run()
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     return _anexar_tempo_execucao(result, elapsed_ms)
 

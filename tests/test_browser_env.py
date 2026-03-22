@@ -1,7 +1,7 @@
 import os
 
-from bot.browser import create_browser_context
-from bot.scraper import TransparencyBot
+from bot_sync_v1.browser import create_browser_context
+from bot_sync_v1.scraper import TransparencyBot
 
 
 class FakePage:

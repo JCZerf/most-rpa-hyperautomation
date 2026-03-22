@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import time
@@ -12,9 +11,9 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiExample, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
-from bot.scraper import TransparencyBotAsync
-from bot.logging_utils import log_event
-from bot.validators import mascarar_identificador
+from bot_sync_v1.scraper import TransparencyBot
+from bot_sync_v1.logging_utils import log_event
+from bot_sync_v1.validators import mascarar_identificador
 from .auth import issue_token, validate_token, scope_allows
 from .metrics import (
     API_CONSULTA_REQUESTS_TOTAL,
@@ -63,8 +62,8 @@ def _resolve_refine_flag(payload: Dict[str, Any], default: bool = False) -> bool
 
 
 def _run_single(consulta_param: str, refine_param: bool) -> Dict[str, Any]:
-    bot = TransparencyBotAsync(headless=True, alvo=str(consulta_param), usar_refine=bool(refine_param))
-    resultado = asyncio.run(bot.run_async())
+    bot = TransparencyBot(headless=True, alvo=str(consulta_param), usar_refine=bool(refine_param))
+    resultado = bot.run()
     return resultado
 
 

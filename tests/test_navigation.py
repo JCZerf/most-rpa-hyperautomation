@@ -1,4 +1,4 @@
-from bot.navigation import _escolher_indice_nome_mais_proximo, _score_nome_proximidade
+from bot_sync_v1.navigation import _escolher_indice_nome_mais_proximo, _score_nome_proximidade
 
 
 def test_score_nome_proximidade_exato():

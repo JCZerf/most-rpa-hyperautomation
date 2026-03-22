@@ -1,4 +1,4 @@
-from bot.utils import valor_texto_para_float, formatar_brl
+from bot_sync_v1.utils import valor_texto_para_float, formatar_brl
 
 
 def test_valor_texto_para_float_brl():
