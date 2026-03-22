@@ -1,15 +1,15 @@
 ## Objetivo
 Consolidar os parametros do teste de estresse atual em Docker para permitir metrificacao padronizada de CPU/RAM e comparacao entre execucoes.
 
-Data de referencia desta configuracao: **21/03/2026**.
+Data de referencia desta configuracao: **22/03/2026**.
 
 ## Regra de precedencia de parametros
 Nos testes com Docker Compose, o valor efetivo pode vir de:
-1. variavel passada no comando (ex.: `BOT_MAX_BROWSERS=2 BOT_MAX_CONSULTAS_POR_BROWSER=4 ...`);
+1. variavel passada no comando (ex.: `BOT_MAX_CONSULTAS_POR_BROWSER=4 ...`);
 2. arquivo `.env` do projeto;
 3. default definido no compose (`${VAR:-default}`).
 
-Exemplo atual do projeto: `.env` possui `BOT_MAX_BROWSERS=2` e `BOT_MAX_CONSULTAS_POR_BROWSER=4`, portanto esses tendem a ser os valores efetivos quando nao sobrescritos.
+Exemplo atual do projeto: `.env` possui `BOT_MAX_CONSULTAS_POR_BROWSER=4`, portanto esse tende a ser o valor efetivo quando nao sobrescrito.
 
 ## Escopo dos testes disponiveis (estado real)
 - Ambiente de execucao: container Docker com limite de **3 CPU** e **2 GB RAM**.
@@ -39,8 +39,7 @@ Fontes:
 
 | Parametro | Valor atual | Impacto na metrica |
 |---|---:|---|
-| `BOT_MAX_BROWSERS` | `2` | Limita quantos browsers rodam em paralelo no lote. |
-| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Limita quantas consultas paralelas rodam por browser. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Limita quantas consultas paralelas rodam por abas (browser fixo em 1). |
 | `BOT_HEADLESS` | `true` | Execucao sem interface grafica. |
 | `PYTHONPATH` | `/app` | Garante importacao dos modulos do projeto no container. |
 
@@ -69,8 +68,7 @@ Fontes:
 | `BOT_REFINAR_BUSCA` | `true` | Ativa/desativa fluxo refinado do bot. |
 | `BOT_HEADLESS` | `true` | Execucao sem interface grafica. |
 | `BOT_INCLUIR_BASE64` | `false` | Remove evidencias Base64 no retorno do stress runner quando `false`. |
-| `BOT_MAX_BROWSERS` | `2` | Quantidade de browsers paralelos no lote. |
-| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Quantidade de consultas paralelas por browser. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | `4` | Quantidade de consultas paralelas por abas (browser fixo em 1). |
 | `BOT_OUTPUT_DIR` | `output/stress-bot` | JSON consolidado de resultado do lote. |
 | `BOT_PLAYWRIGHT_SLOW_MO_MS` | `20` | Delay entre acoes do navegador no modo stress sem API. |
 | `BOT_PLAYWRIGHT_BLOCK_RESOURCE_TYPES` | `font,media` | Bloqueia recursos pesados por tipo sem impactar imagens/evidencias por padrao. |
@@ -90,7 +88,6 @@ COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 Exemplo (bot direto, 3 consultas):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_BROWSERS=2 \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -100,7 +97,6 @@ Exemplo (3 consultas simultaneas, `refinar_busca=false`):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
 BOT_REFINAR_BUSCA=false \
-BOT_MAX_BROWSERS=2 \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -110,7 +106,6 @@ Exemplo (3 consultas simultaneas, `refinar_busca=true`):
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
 BOT_REFINAR_BUSCA=true \
-BOT_MAX_BROWSERS=2 \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -123,7 +118,6 @@ Executar em duas etapas com a mesma consulta, mudando apenas `BOT_REFINAR_BUSCA`
 ```bash
 BOT_CONSULTA='04031769644' \
 BOT_REFINAR_BUSCA=false \
-BOT_MAX_BROWSERS=1 \
 BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -133,7 +127,6 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 ```bash
 BOT_CONSULTA='04031769644' \
 BOT_REFINAR_BUSCA=true \
-BOT_MAX_BROWSERS=1 \
 BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -203,3 +196,148 @@ O teste limita corretamente o hardware do container para simulacao (`3 CPU`/`2GB
 Licao de estabilidade (validada em 21/03/2026):
 - para busca por nome em `refinar_busca=false`, `wait_for_load_state("networkidle")` pode ficar pendente.
 - estrategia adotada: tolerar timeout de `networkidle` e continuar sincronizacao pelo contador `#countResultados`.
+
+## Benchmark exploratorio registrado (22/03/2026) - multi-browser
+Objetivo desta rodada:
+- comparar `4/2` vs `8/1` com o mesmo lote de **8 consultas**;
+- validar comportamento em condicao real de servidor (`BOT_HEADLESS=true`);
+- registrar custo de CPU/RAM e estabilidade funcional.
+
+Parametros fixos dos dois cenarios:
+- `BOT_HEADLESS=true`
+- `BOT_REFINAR_BUSCA=false`
+- `BOT_INCLUIR_BASE64=false`
+- limite de infraestrutura do container: `3 CPU` e `2 GB RAM`
+
+Consultas utilizadas (primeiras 8 da `DEFAULT_TEST_CONSULTAS`):
+- `A DILA DA SILVA BRITO LIMA`
+- `BA N TCHI OLIVE CONFORTE N DAH KOUAGOU`
+- `CAA SANTOS BARROS MACHADO`
+- `D ANGELA ALVES DE BARROS FELIPE`
+- `E DILA LARISSA RODRIGUES BERTOLDO`
+- `F MAGNIFICAT ZINSOU`
+- `G DEON DA SILVA VIEIRA`
+- `HA MOHAMMAD OLIUR RAHMAN`
+
+Comandos executados:
+```bash
+# Cenario 4/2
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_REFINAR_BUSCA=false \
+BOT_INCLUIR_BASE64=false \
+BOT_HEADLESS=true \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+OUT_BASE_DIR=logs/stress/benchmark-4x2 \
+./scripts/run_stress_monitor.sh
+
+# Cenario 8/1
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_REFINAR_BUSCA=false \
+BOT_INCLUIR_BASE64=false \
+BOT_HEADLESS=true \
+BOT_MAX_BROWSERS=1 \
+BOT_MAX_CONSULTAS_POR_BROWSER=8 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+OUT_BASE_DIR=logs/stress/benchmark-8x1 \
+./scripts/run_stress_monitor.sh
+```
+
+Artefatos desta rodada:
+- Cenario `4/2`: `logs/stress/benchmark-4x2/20260322_174223/`
+- Cenario `8/1`: `logs/stress/benchmark-8x1/20260322_174626/`
+- Consolidado `4/2`: `output/stress-bot/batch_result_20260322_204442.json`
+- Consolidado `8/1`: `output/stress-bot/batch_result_20260322_204630.json`
+
+### Resultado resumido
+| Metrica | 4/2 (2 browsers x 4) | 8/1 (1 browser x 8) | Leitura |
+|---|---:|---:|---|
+| Duracao total (`duracao_total_ms`) | `58.741 ms` | `55.089 ms` | `8/1` ligeiramente mais rapido |
+| Sucesso funcional | `4 ok / 4 error` | `1 ok / 7 error` | `4/2` mais estavel |
+| CPU media | `163.73%` | `133.82%` | `8/1` mais leve |
+| CPU pico | `308.16%` | `305.95%` | praticamente equivalente |
+| RAM media | `56.58%` | `46.34%` | `8/1` mais leve |
+| RAM pico | `99.73%` (`1.995 GiB`) | `98.78%` (`1.976 GiB`) | ambos quase no teto de 2 GB |
+| PIDs medio | `291.48` | `209.68` | `8/1` mais leve |
+| PIDs pico | `441` | `328` | `8/1` mais leve |
+
+### Conclusao tecnica desta rodada
+- Em **consumo de hardware (CPU/RAM)**, o cenario que se saiu melhor foi **`8/1`**.
+- Em **estabilidade funcional de raspagem**, o cenario que se saiu melhor foi **`4/2`**.
+- Leitura operacional: a diferenca de tempo total foi pequena, mas a diferenca de sucesso foi grande. Para producao, `4/2` segue mais seguro hoje.
+- Sinal de saturacao: os dois cenarios encostaram no limite de memoria do container (aprox. 2 GB), indicando que o gargalo de RAM continua relevante.
+
+## Benchmark decisivo registrado (22/03/2026) - concorrencia reduzida
+Objetivo desta rodada:
+- validar estabilidade reduzindo a pressao de concorrencia;
+- comparar `4/1` vs `2/2` no mesmo lote de 8 consultas;
+- decidir configuracao padrao da API e do runner.
+
+Nota:
+- esta rodada foi executada antes da remocao definitiva do parametro `BOT_MAX_BROWSERS`; os valores estao mantidos aqui apenas como historico de evidencia.
+
+Comandos executados:
+```bash
+# Cenario 4/1
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_REFINAR_BUSCA=false \
+BOT_INCLUIR_BASE64=false \
+BOT_HEADLESS=true \
+BOT_MAX_BROWSERS=1 \
+BOT_MAX_CONSULTAS_POR_BROWSER=4 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+OUT_BASE_DIR=logs/stress/benchmark-4x1 \
+./scripts/run_stress_monitor.sh
+
+# Cenario 2/2
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_REFINAR_BUSCA=false \
+BOT_INCLUIR_BASE64=false \
+BOT_HEADLESS=true \
+BOT_MAX_BROWSERS=2 \
+BOT_MAX_CONSULTAS_POR_BROWSER=2 \
+COMPOSE_FILE=docker-compose.bot-stress.yml \
+OUT_BASE_DIR=logs/stress/benchmark-2x2 \
+./scripts/run_stress_monitor.sh
+```
+
+Artefatos desta rodada:
+- Cenario `4/1`: `logs/stress/benchmark-4x1/20260322_175514/`
+- Cenario `2/2`: `logs/stress/benchmark-2x2/20260322_175723/`
+- Consolidado `4/1`: `output/stress-bot/batch_result_20260322_205519.json`
+- Consolidado `2/2`: `output/stress-bot/batch_result_20260322_205727.json`
+
+### Resultado resumido
+| Metrica | 4/1 (1 browser x 4 abas) | 2/2 (2 browsers x 2 abas) | Leitura |
+|---|---:|---:|---|
+| Duracao total (`duracao_total_ms`) | `85.640 ms` | `75.163 ms` | `2/2` mais rapido |
+| Sucesso funcional | `8 ok / 0 error` | `8 ok / 0 error` | ambos estaveis |
+| CPU media | `169.18%` | `184.09%` | `4/1` mais leve |
+| CPU pico | `313.12%` | `315.75%` | equivalente |
+| RAM media | `54.59%` | `60.75%` | `4/1` mais leve |
+| RAM pico | `94.94%` | `92.78%` | equivalente |
+| PIDs medio | `216.41` | `313.88` | `4/1` mais leve |
+| PIDs pico | `309` | `425` | `4/1` mais leve |
+
+### Decisao tecnica vigente
+- A API e o stress runner passam a operar com **browser fixo em 1**.
+- O unico fallback/configuracao de paralelismo fica em **`BOT_MAX_CONSULTAS_POR_BROWSER`** (abas simultaneas), com default `4`.
+- A configuracao de quantidade de browsers foi removida para evitar picos de RAM e excesso de processos.
+- Limite de infraestrutura (`cpus`, `mem_limit`, `memswap_limit`) permanece fixo no compose, sem parametrizacao por env.
+
+### Validacao pos-ajuste (22/03/2026)
+Objetivo:
+- confirmar o comportamento apos remocao do parametro `BOT_MAX_BROWSERS` no codigo/configuracao executavel;
+- validar coerencia do retorno em lote.
+
+Execucao registrada:
+- pasta de metricas: `logs/stress/benchmark-fixed-1x4/20260322_180945/`
+- consolidado: `output/stress-bot/batch_result_20260322_210950.json`
+- parametros: `BOT_HEADLESS=true`, `BOT_REFINAR_BUSCA=false`, `BOT_INCLUIR_BASE64=false`, `BOT_MAX_CONSULTAS_POR_BROWSER=4`
+
+Resultado:
+- `8/8` consultas com `status=ok` (zero erros).
+- coerencia do payload: `id_consulta`, `data_hora_consulta`, `pessoa` e `beneficios[]` presentes em todos os itens.
+- duracao total: `77.320 ms`.
+- consumo: `CPU media 178.69%`, `CPU pico 311.93%`, `RAM media 55.49%`, `RAM pico 84.61%`.

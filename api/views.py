@@ -33,6 +33,20 @@ from .metrics import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_INCLUDE_BASE64 = env_bool("BOT_INCLUDE_BASE64_DEFAULT", True)
+SWAGGER_EXAMPLE_CONSULTAS = [
+    "A DILA DA SILVA BRITO LIMA",
+    "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU",
+    "CAA SANTOS BARROS MACHADO",
+    "D ANGELA ALVES DE BARROS FELIPE",
+    "E DILA LARISSA RODRIGUES BERTOLDO",
+    "F MAGNIFICAT ZINSOU",
+    "GAABI OLIVEIRA DE MESQUITA",
+    "HA MOHAMMAD OLIUR RAHMAN",
+    "HAABE OLIVEIRA DA SILVA",
+    "I DINA APARECIDA DA SILVA GARCIA",
+    "J QUECEMIRA BATISTA DOS SANTOS",
+    "K TIANA MARLEN SILVA ARAUJO",
+]
 
 
 class ItemConsultaSerializer(serializers.Serializer):
@@ -95,7 +109,6 @@ def _run_batch(itens: List[Dict[str, Any]], incluir_base64: bool) -> Dict[str, A
     return async_to_sync(executar_consultas_em_lote_async)(
         itens,
         headless=True,
-        max_browsers=max_browsers,
         max_consultas_por_browser=max_consultas_por_browser,
         incluir_base64=incluir_base64,
     )
@@ -156,7 +169,7 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
         "- Consulta unitária simples: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
         "- Consulta em lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false}\n"
         "- Consulta em lote avançada: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":true}\n\n"
-        "Paralelismo padrão: 2 browsers em paralelo, até 4 consultas por browser. "
+        "Paralelismo padrão: 1 browser, até 4 consultas por abas em paralelo. "
         "Quando excede essa capacidade, os blocos entram em fila interna (sem rejeição por tamanho apenas por volume).\n\n"
         "Também há exemplos avançados com refinar_busca=true (lote simples).\n\n"
         "Campos aceitos em 'consulta': CPF (11 dígitos), NIS (11 dígitos) ou nome completo.\n"
@@ -168,14 +181,14 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
     examples=[
         OpenApiExample(
             "Consulta unitária simples",
-            value={"consulta": "04031769644", "refinar_busca": False},
+            value={"consulta": SWAGGER_EXAMPLE_CONSULTAS[0], "refinar_busca": False},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
             "Consulta dupla simples",
             value={
-                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "consultas": SWAGGER_EXAMPLE_CONSULTAS[:2],
                 "refinar_busca": False,
             },
             request_only=True,
@@ -184,26 +197,28 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
         OpenApiExample(
             "Consulta tripla simples",
             value={
-                "consultas": [
-                    "04031769644",
-                    "A ANNE CHRISTINE SILVA RIBEIRO",
-                    "A LIDA PEREIRA FIALHO",
-                ],
+                "consultas": SWAGGER_EXAMPLE_CONSULTAS[:3],
                 "refinar_busca": False,
             },
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
+            "Consulta lote 12 nomes",
+            value={"consultas": SWAGGER_EXAMPLE_CONSULTAS, "refinar_busca": False},
+            request_only=True,
+            media_type='application/json',
+        ),
+        OpenApiExample(
             "Consulta unitária avançada",
-            value={"consulta": "04031769644", "refinar_busca": True},
+            value={"consulta": SWAGGER_EXAMPLE_CONSULTAS[3], "refinar_busca": True},
             request_only=True,
             media_type='application/json',
         ),
         OpenApiExample(
             "Consulta dupla avançada",
             value={
-                "consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"],
+                "consultas": SWAGGER_EXAMPLE_CONSULTAS[3:5],
                 "refinar_busca": True,
             },
             request_only=True,
@@ -212,11 +227,7 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
         OpenApiExample(
             "Consulta tripla avançada",
             value={
-                "consultas": [
-                    "04031769644",
-                    "A ANNE CHRISTINE SILVA RIBEIRO",
-                    "A LIDA PEREIRA FIALHO",
-                ],
+                "consultas": SWAGGER_EXAMPLE_CONSULTAS[3:6],
                 "refinar_busca": True,
             },
             request_only=True,
@@ -228,7 +239,7 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
                 "id_consulta": "6a7e35d0-6d19-4e53-8b02-17bb30a8b7f6",
                 "data_hora_consulta": "15/03/2026 12:45",
                 "pessoa": {
-                    "consulta": "04031769644",
+                    "consulta": SWAGGER_EXAMPLE_CONSULTAS[0],
                     "nome": "NOME DA PESSOA",
                     "cpf": "***.***.***-**",
                     "localidade": "UF",
@@ -254,7 +265,7 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
                 "data_hora_consulta": "15/03/2026 12:46",
                 "status": "not_found",
                 "pessoa": {
-                    "consulta": "04031769644",
+                    "consulta": SWAGGER_EXAMPLE_CONSULTAS[6],
                     "nome": "N/A",
                     "cpf": "N/A",
                     "localidade": "N/A",

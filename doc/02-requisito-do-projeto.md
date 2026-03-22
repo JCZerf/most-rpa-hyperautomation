@@ -30,7 +30,7 @@
 - A automação depende da disponibilidade e layout do Portal da Transparência; mudanças podem exigir atualização de seletores.
 - O uso de dados pessoais deve seguir políticas internas e LGPD (armazenamento transitório, mínimo necessário).
 - Sem limite fixo de 3 entradas por requisição (batch): o processamento usa fila interna quando o volume excede o paralelismo configurado.
-- Paralelismo padrão do bot async: `2` browsers em paralelo e até `4` consultas por browser (configurável via `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`).
+- Paralelismo padrão do bot async: `1` browser fixo e até `4` consultas por abas (configurável via `BOT_MAX_CONSULTAS_POR_BROWSER`).
 - Validação prévia de CPF/NIS/nomes; entradas inválidas são rejeitadas sem abrir navegador; logs mascaram identificadores.
 
 ## Diretrizes de qualidade da entrega
@@ -72,5 +72,5 @@
 ## Decisões de implementação deste projeto
 - Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada.
 - Configuração por variáveis de ambiente para API e bot, com descrição funcional centralizada no [README (Referência de variáveis de ambiente)](../README.md#env-reference).
-- Batch com fila interna para excedentes; paralelismo operacional configurável por ambiente via `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`.
+- Batch com fila interna para excedentes; paralelismo operacional configurável por ambiente via `BOT_MAX_CONSULTAS_POR_BROWSER` (browser fixo em 1).
 - Nome de campo de API padronizado para `refinar_busca` (campo único aceito para refinamento).

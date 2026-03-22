@@ -14,7 +14,7 @@
 - Integração contínua com GitHub Actions: **feito** (workflows versionados para validação/smoke).
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
 - Lote com fila interna (sem limite fixo de 3 entradas): **feito**. Quando excede a capacidade paralela, os blocos aguardam em fila e seguem processando.
-- Execução simultânea de bots (requisito do desafio): **feito no código** (API e runner async), com paralelismo ajustável por ambiente via `BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER` (padrão `2x4`).
+- Execução simultânea de bots (requisito do desafio): **feito no código** (API e runner async), com browser fixo em `1` e paralelismo por abas ajustável via `BOT_MAX_CONSULTAS_POR_BROWSER` (padrão `1x4`).
 - Flag de resposta leve sem Base64: **feito** (`incluir_base64=false` por request; default configurável por `BOT_INCLUDE_BASE64_DEFAULT`).
 - Concorrência de requisições HTTP por instância: **configurável** via `GUNICORN_WORKERS` e `GUNICORN_THREADS` (padrão `1x2`, ou seja, até 2 requisições simultâneas por instância).
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
@@ -46,6 +46,7 @@
 - Metadados da rodada manual atualizada: [README da evidência manual](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
 - Evidências de desempenho em homologação (14/03/2026 19h): [performance-hml](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h)
 - Evidências da documentação interativa e autenticação: [api-docs](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h)
+- Benchmarks de concorrencia (22/03/2026): [doc/05-parametros-do-teste-de-estresse.md](./05-parametros-do-teste-de-estresse.md)
 - Evidência de integração com Google Sheets: [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
 - Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
 - Evidência do fluxo no Make: [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)

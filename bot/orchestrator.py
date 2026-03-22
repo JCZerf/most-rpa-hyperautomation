@@ -39,17 +39,15 @@ def env_bool(name: str, default: bool) -> bool:
     return default
 
 
-def get_runtime_limits(
-    max_browsers: int | None = None,
-    max_consultas_por_browser: int | None = None,
-) -> Tuple[int, int]:
-    browsers = max_browsers if max_browsers is not None else _env_int("BOT_MAX_BROWSERS", 2)
+def get_runtime_limits(max_consultas_por_browser: int | None = None) -> Tuple[int, int]:
+    # Decisao tecnica: manter sempre 1 browser por execucao para reduzir pressao de RAM.
+    browsers_fixos = 1
     por_browser = (
         max_consultas_por_browser
         if max_consultas_por_browser is not None
         else _env_int("BOT_MAX_CONSULTAS_POR_BROWSER", 4)
     )
-    return max(1, int(browsers)), max(1, int(por_browser))
+    return browsers_fixos, max(1, int(por_browser))
 
 
 def remover_imagens_base64(valor: Any) -> Any:
@@ -181,7 +179,6 @@ async def executar_consultas_em_lote_async(
     itens: List[Dict[str, Any]],
     *,
     headless: bool = True,
-    max_browsers: int | None = None,
     max_consultas_por_browser: int | None = None,
     incluir_base64: bool = True,
 ) -> Dict[str, Any]:
@@ -199,29 +196,23 @@ async def executar_consultas_em_lote_async(
             },
         }
 
-    browsers, por_browser = get_runtime_limits(max_browsers, max_consultas_por_browser)
+    browsers, por_browser = get_runtime_limits(max_consultas_por_browser)
     blocos = list(_chunked(itens, por_browser))
-    sem = asyncio.Semaphore(browsers)
 
     async with async_playwright() as pw:
-        async def _executar_bloco_com_fila(indice_bloco: int, bloco: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-            async with sem:
-                browser_lote = (indice_bloco % browsers) + 1
-                return await _executar_bloco_no_browser(
-                    pw,
-                    bloco,
-                    browser_lote=browser_lote,
-                    indice_bloco=indice_bloco,
-                    limite_consultas_por_browser=por_browser,
-                    headless=headless,
-                    incluir_base64=incluir_base64,
-                )
-
-        tarefas = [
-            asyncio.create_task(_executar_bloco_com_fila(indice_bloco, bloco))
-            for indice_bloco, bloco in enumerate(blocos)
-        ]
-        resultados_por_bloco = await asyncio.gather(*tarefas)
+        resultados_por_bloco: List[List[Dict[str, Any]]] = []
+        for indice_bloco, bloco in enumerate(blocos):
+            # Cada bloco usa 1 browser com N abas em paralelo; excedentes entram em fila.
+            resultados_bloco = await _executar_bloco_no_browser(
+                pw,
+                bloco,
+                browser_lote=1,
+                indice_bloco=indice_bloco,
+                limite_consultas_por_browser=por_browser,
+                headless=headless,
+                incluir_base64=incluir_base64,
+            )
+            resultados_por_bloco.append(resultados_bloco)
 
     resultados = [item for bloco in resultados_por_bloco for item in bloco]
     resultados.sort(key=lambda r: int(r.get("indice_entrada", 0)))

@@ -172,11 +172,10 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
 
-Configuração padrão do modo async (2 browsers x 4 consultas por browser):
+Configuração padrão do modo async (1 browser fixo x 4 abas simultâneas):
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_BROWSERS=2 \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=false \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -185,7 +184,6 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 
 ```bash
 BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
-BOT_MAX_BROWSERS=2 \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=true \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -216,8 +214,8 @@ Payloads aceitos:
 - **Flag opcional de resposta leve**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
 
 Paralelismo padrão do bot async por requisição:
-- até `2` browsers em paralelo (`BOT_MAX_BROWSERS`)
-- até `4` consultas em paralelo por browser (`BOT_MAX_CONSULTAS_POR_BROWSER`)
+- `1` browser fixo por execução/lote
+- até `4` consultas em paralelo por abas (`BOT_MAX_CONSULTAS_POR_BROWSER`)
 - excedentes entram em fila automática no mesmo request.
 
 Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_consulta` (UUID) e `data_hora_consulta` para auditoria. Erros de execução retornam `status="error"` com HTTP não-200.
@@ -390,7 +388,7 @@ Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-
 - `TransparencyBotAsync(headless=True, alvo="CPF|NIS|Nome", usar_refine=False)` — passe o alvo na criação do bot.
 - `usar_refine=True` ativa o fluxo “Refine a Busca”; `False` usa a busca simples (lupa).
 - Na API, use os campos `refinar_busca` e opcionalmente `incluir_base64`.
-- Na API e no stress runner, o paralelismo padrão por requisição/lote é `2` browsers x `4` consultas por browser (`BOT_MAX_BROWSERS` e `BOT_MAX_CONSULTAS_POR_BROWSER`), com fila automática para excedentes.
+- Na API e no stress runner, o paralelismo padrão por requisição/lote é `1` browser fixo com até `4` consultas por abas (`BOT_MAX_CONSULTAS_POR_BROWSER`), com fila automática para excedentes.
 - Concorrência de requisições HTTP é definida pelo Gunicorn no deploy: por padrão `GUNICORN_WORKERS=1` e `GUNICORN_THREADS=2`, ou seja, **até 2 requisições simultâneas por instância**.
 - Browser/Playwright via `.env`:
   - `PLAYWRIGHT_CHANNEL`: `chromium` (padrão) ou `chrome`.
@@ -415,8 +413,7 @@ Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
-| `BOT_MAX_BROWSERS` | Não | `2` | Número de browsers paralelos por execução/lote no bot async. |
-| `BOT_MAX_CONSULTAS_POR_BROWSER` | Não | `4` | Número de consultas em paralelo por browser no bot async. |
+| `BOT_MAX_CONSULTAS_POR_BROWSER` | Não | `4` | Número de consultas em paralelo por abas no bot async (browser fixo em 1). |
 | `BOT_INCLUDE_BASE64_DEFAULT` | Não | `true` | Define o default de `incluir_base64` quando o cliente não envia o campo no payload da API. |
 | `GUNICORN_WORKERS` | Não | `1` | Número de processos Gunicorn (concorrência de requisições por instância). |
 | `GUNICORN_THREADS` | Não | `2` | Número de threads por processo Gunicorn (concorrência de requisições por instância). |

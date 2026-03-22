@@ -30,8 +30,9 @@ DEFAULT_TEST_CONSULTAS = [
     "D ANGELA ALVES DE BARROS FELIPE",
     "E DILA LARISSA RODRIGUES BERTOLDO",
     "F MAGNIFICAT ZINSOU",
-    "G DEON DA SILVA VIEIRA",
+    "GAABI OLIVEIRA DE MESQUITA",
     "HA MOHAMMAD OLIUR RAHMAN",
+    "HAABE OLIVEIRA DA SILVA",
     "I DINA APARECIDA DA SILVA GARCIA",
     "J QUECEMIRA BATISTA DOS SANTOS",
     "K TIANA MARLEN SILVA ARAUJO",
@@ -64,13 +65,7 @@ def _parse_args() -> argparse.Namespace:
         "--limite-consultas-por-browser",
         type=int,
         default=int(os.getenv("BOT_MAX_CONSULTAS_POR_BROWSER", "4")),
-        help="Quantidade máxima de consultas por browser/página antes de rotacionar (padrão: 4).",
-    )
-    parser.add_argument(
-        "--max-browsers",
-        type=int,
-        default=int(os.getenv("BOT_MAX_BROWSERS", "2")),
-        help="Quantidade máxima de browsers em paralelo (padrão: 2).",
+        help="Quantidade máxima de consultas por abas simultâneas (browser fixo em 1, padrão: 4).",
     )
     parser.add_argument(
         "--modo-dev-sem-imagens",
@@ -264,49 +259,33 @@ async def _run() -> int:
     limite = int(args.limite_consultas_por_browser)
     if limite <= 0:
         raise ValueError("--limite-consultas-por-browser deve ser maior que zero.")
-    max_browsers = int(args.max_browsers)
-    if max_browsers <= 0:
-        raise ValueError("--max-browsers deve ser maior que zero.")
 
     headless = not args.headed
     usar_refine = args.refinar_busca
     blocos = list(_chunked(consultas, limite))
+    browsers_fixos = 1
 
     logger.info(
-        "Iniciando execução async: total_consultas=%s, limite_por_browser=%s, browsers_previstos=%s, max_browsers_paralelos=%s, headless=%s, refinar_busca=%s",
+        "Iniciando execução async: total_consultas=%s, limite_por_browser=%s, blocos_fila=%s, browsers_fixos=%s, headless=%s, refinar_busca=%s",
         len(consultas),
         limite,
         len(blocos),
-        max_browsers,
+        browsers_fixos,
         headless,
         usar_refine,
     )
 
     resultados: List[Dict[str, Any]] = []
     async with async_playwright() as pw:
-        sem = asyncio.Semaphore(max_browsers)
-
-        async def executar_bloco_com_fila(indice_browser: int, bloco: List[str]) -> List[Dict[str, Any]]:
-            async with sem:
-                return await _executar_bloco_no_browser(
-                    pw,
-                    bloco,
-                    indice_browser=indice_browser,
-                    limite_consultas_por_browser=limite,
-                    headless=headless,
-                    usar_refine=usar_refine,
-                )
-
-        tarefas_browsers = []
-        for indice_browser, bloco in enumerate(blocos, start=1):
-            tarefas_browsers.append(
-                asyncio.create_task(
-                    executar_bloco_com_fila(indice_browser, bloco)
-                )
+        for bloco in blocos:
+            resultado_bloco = await _executar_bloco_no_browser(
+                pw,
+                bloco,
+                indice_browser=1,
+                limite_consultas_por_browser=limite,
+                headless=headless,
+                usar_refine=usar_refine,
             )
-
-        resultados_por_browser = await asyncio.gather(*tarefas_browsers)
-        for resultado_bloco in resultados_por_browser:
             resultados.extend(resultado_bloco)
 
     tem_erro_execucao = any((item.get("resultado") or {}).get("status") == "error" for item in resultados)
@@ -322,8 +301,8 @@ async def _run() -> int:
             "meta_execucao": {
                 "total_consultas": len(consultas),
                 "limite_consultas_por_browser": limite,
-                "browsers_utilizados": len(blocos),
-                "max_browsers_paralelos": max_browsers,
+                "browsers_utilizados": browsers_fixos,
+                "blocos_fila": len(blocos),
                 "modo_dev_sem_imagens": args.modo_dev_sem_imagens,
             },
         }

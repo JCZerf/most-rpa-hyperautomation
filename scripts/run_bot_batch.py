@@ -107,7 +107,6 @@ def main() -> int:
         executar_consultas_em_lote_async(
             itens_execucao,
             headless=headless,
-            max_browsers=max_browsers,
             max_consultas_por_browser=max_consultas_por_browser,
             incluir_base64=incluir_base64,
         )

@@ -101,7 +101,7 @@ class TransparencyBotAsync:
         pessoal: Dict[str, Any],
         benefits_data: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return {
+        resultado_sem_beneficios = {
             "pessoa": {
                 **self._normalizar_pessoa(pessoal),
                 "nis": None,
@@ -117,6 +117,15 @@ class TransparencyBotAsync:
                 "total_valor_recebido_formatado": benefits_data.get("total_valor_recebido_formatado", "R$ 0,00"),
             },
         }
+        log_event(
+            logger,
+            logging.INFO,
+            "consulta_concluida",
+            alvo=self.alvo,
+            nome=pessoal.get("nome") if pessoal else self.alvo,
+            resultados=search_result.get("quantidade", 0),
+        )
+        return resultado_sem_beneficios
 
     def _resposta_final(
         self,

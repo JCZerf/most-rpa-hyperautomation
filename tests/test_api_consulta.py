@@ -51,7 +51,7 @@ def test_consulta_batch_sem_limite_fixo(client, monkeypatch):
                 }
                 for item in itens
             ],
-            "meta_execucao": {"max_browsers": 2, "max_consultas_por_browser": 4, "blocos_fila": 3},
+            "meta_execucao": {"max_browsers": 1, "max_consultas_por_browser": 4, "blocos_fila": 3},
         }
 
     monkeypatch.setattr("api.views._run_batch", fake_run_batch)
