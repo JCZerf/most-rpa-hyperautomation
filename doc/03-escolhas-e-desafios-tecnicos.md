@@ -1,5 +1,6 @@
 ## Atalhos rápidos
 - Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Autenticação e JWT (referência única): [README - Autenticação OAuth2/JWT](../README.md#auth-reference)
 - Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
 
 ## Escolhas confirmadas da implementação atual
@@ -8,8 +9,7 @@
 - **Desambiguação por nome com score:** a seleção do resultado usa normalização de nome (acentos/pontuação/artigos), cálculo de score de proximidade e escolha do melhor candidato; fallback para o primeiro resultado quando não há índice válido.
 - **Escopo de benefícios e layouts:** mapeamento focado nos benefícios exigidos no desafio (Auxílio Brasil, Auxílio Emergencial e Bolsa Família). Para cenários fora do recorte, mantém extração de panorama/dados base sem aprofundar extração não essencial.
 - **Escopo de parcelas em detalhe:** a extração atual trabalha com a tabela detalhada visível/compatível na página de detalhe, sem navegação ampla por abas internas adicionais, como estratégia de desempenho e simplicidade para o escopo.
-- **Autenticação da API:** OAuth2 client_credentials com JWT HS256 de uso único por consulta (cada chamada exige novo token), chave dedicada (`API_MASTER_KEY`) e expiração de segurança para token não utilizado (`API_TOKEN_TTL`).
-  - Observação de implementação atual: o controle de reuso do token é em memória por processo; para unicidade global em múltiplos workers/instâncias, o passo seguinte é store compartilhado.
+- **Autenticação da API:** OAuth2 `client_credentials` com JWT HS256 de uso único por consulta (detalhes operacionais centralizados no [README - Autenticação OAuth2/JWT](../README.md#auth-reference)).
 - **Parâmetro de refinamento:** padronização para `refinar_busca` como campo oficial e único da API.
 - **Migração de motor de execução (sync -> async):** a aplicação passou a operar exclusivamente com o bot assíncrono, sem fallback para o modo síncrono.
 - **Modelo de concorrência do bot async:** padrão operacional de `1` browser fixo com até `4` consultas simultâneas por abas (configurável por `BOT_MAX_CONSULTAS_POR_BROWSER`).

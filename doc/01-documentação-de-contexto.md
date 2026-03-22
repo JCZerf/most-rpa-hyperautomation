@@ -1,5 +1,6 @@
 ## Atalhos rápidos
 - Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Autenticação e JWT (referência única): [README - Autenticação OAuth2/JWT](../README.md#auth-reference)
 - Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
 
 ## Visão geral

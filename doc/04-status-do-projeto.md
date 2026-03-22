@@ -1,5 +1,6 @@
 ## Atalhos rápidos
 - Variáveis de ambiente (referência completa): [README - Referência de variáveis de ambiente](../README.md#env-reference)
+- Autenticação e JWT (referência única): [README - Autenticação OAuth2/JWT](../README.md#auth-reference)
 - Requisitos e contrato da API: [doc/02-requisito-do-projeto.md](./02-requisito-do-projeto.md)
 
 ## Status por requisito (doc/02)
@@ -12,7 +13,7 @@
 - Observabilidade de métricas (RF-12): **feito em ambiente local** com endpoint `/metrics`, coleta Prometheus e dashboard Grafana.
 - Notificação de alerta (RF-13): **feito em ambiente local** com regra no Grafana enviando alerta para Telegram.
 - Escopo de observabilidade em cloud: **não aplicado nesta fase** por decisão de custo/benefício no contexto de desafio; stack validada localmente.
-- Autenticação JWT HS256 via `API_MASTER_KEY`: **feito** (endpoint de token + validação Bearer na consulta, com token de uso único por requisição).
+- Autenticação OAuth2/JWT de uso único por requisição: **feito** (detalhes centralizados em [README - Autenticação OAuth2/JWT](../README.md#auth-reference)).
 - Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, `API_TOKEN_TTL` de segurança): **feito**.
 - Integração contínua com GitHub Actions: **feito** (workflows versionados para validação/smoke).
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
@@ -47,7 +48,6 @@
 - Ampliar extração de detalhes para navegação em abas/tabelas adicionais de parcelas quando o layout exigir.
 - Expandir cobertura de layouts de benefícios fora do recorte principal, mantendo fallback seguro de panorama/dados base.
 - Consolidar observabilidade operacional (métricas agregadas, SLO de sucesso/latência e alerta automático).
-- Finalizar right-sizing com base em métricas reais de memória, latência, taxa de erro e custo.
 - Formalizar LGPD no downstream (Make -> Drive/Sheets): retenção/expurgo, minimização de dados e governança de acesso com revisão periódica.
 
 ## Evidências registradas

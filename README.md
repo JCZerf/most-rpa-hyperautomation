@@ -198,6 +198,7 @@ python manage.py runserver 8000
 - Esquema OpenAPI (YAML/JSON): `http://127.0.0.1:8000/api/schema/`
 - Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. O token é **de uso único** (cada chamada em `/api/consulta/` precisa de autenticação nova). Tokens HS256 são assinados com `API_MASTER_KEY` (mín. 32 chars) e têm expiração de segurança (`API_TOKEN_TTL`) caso não sejam usados.
 
+<a id="auth-reference"></a>
 ### Autenticação (OAuth2 client_credentials simplificado)
 - `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`.
 - Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL de segurança para token não usado = `API_TOKEN_TTL`.
@@ -498,22 +499,10 @@ E2E_REQUIRE_SUCCESS=true \
 - Configure os secrets do repositório:
   - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA`.
 
-### Evidência E2E validada
-- Execução pós-deploy aprovada em **14/03/2026** (run `23096919987`): [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
-- Metadados da execução: [README da evidência](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
-- Rodada com concorrência (local): [e2e-smoke-artifacts concorrencia](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
-
-### Evidências de integrações externas
-- Google Sheets (registro da execução): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
-- Google Sheets (registro da execução - versão atualizada): [google_sheets_evidencia_V2.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia_V2.png)
-- Google Drive (arquivo gerado): [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
-- Make (workflow/orquestração): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
-- Make (visão geral de fluxo): [workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/workflow.png)
-- Demo de execução async (vídeo): [demonstração_async.mp4](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/demonstração_async.mp4)
-
-### Evidências de observabilidade
-- Dashboard Grafana: [grafana_basic_painel.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/grafana_basic_painel.png)
-- Notificação Telegram (alerta): [telegram-notification-evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/telegram-notification-evidencia.png)
+### Evidências (catálogo único)
+- Catálogo consolidado e atualizado de evidências: [doc/04-status-do-projeto.md (seção "Evidências registradas")](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md).
+- Diretório dos artefatos versionados: [doc/evidencias](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias).
+- Diretório de evidências visuais e demo: [img](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img).
 
 ## Estrutura de saída (resumo)
 - `id_consulta`: UUID da execução (sempre presente).
