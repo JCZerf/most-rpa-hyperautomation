@@ -49,25 +49,6 @@
 - **Camada anti-bloqueio/WAF mais robusta:** estratégias adicionais de redução de assinatura de automação, controle de ritmo e observabilidade específica de bloqueios.
 
 ## Referências de evidência
-- Consolidado de status/evidências gerais: [doc/04-status-do-projeto.md](./04-status-do-projeto.md)
-- E2E smoke pós-deploy (run `23096919987`) - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/e2e-smoke-artifacts)
-- E2E smoke pós-deploy - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-23096919987/README.md)
-- E2E smoke concorrente local - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/e2e-smoke-artifacts)
-- E2E smoke concorrente local - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-local-concorrencia/README.md)
-- E2E smoke manual sucesso - artefatos: [e2e-smoke-artifacts](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/e2e-smoke-artifacts)
-- E2E smoke manual sucesso - metadados: [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/e2e-smoke/2026-03-14-run-manual-successo/README.md)
-- Evidência de documentação da API (Swagger + auth): [README](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/README.md)
-- Evidência visual da documentação API: [tela_doc_api.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/tela_doc_api.png)
-- Evidência visual de geração de token/JWT: [auth_geracao_jwt.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/api-docs/2026-03-14-19h/auth_geracao_jwt.png)
-- Evidências de performance em HML: [observacoes.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/observacoes.md)
-- Evidência visual de performance (busca única): [busca_unica_refine_false.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/busca_unica_refine_false.png)
-- Evidência visual de performance (lote avançado): [busca_em_lote_avançado.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/busca_em_lote_avançado.png)
-- Evidência visual de performance (lote simples + refine): [Lote_simples+refine_true.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias/performance-hml/2026-03-14-19h/Lote_simples+refine_true.png)
-- Evidência de integração com Google Sheets (v1): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
-- Evidência de integração com Google Sheets (v2): [google_sheets_evidencia_V2.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia_V2.png)
-- Evidência de integração com Google Drive: [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
-- Evidência do fluxo Make (módulos): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
-- Evidência do fluxo Make (visão geral): [workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/workflow.png)
-- Evidência de observabilidade (dashboard Grafana): [grafana_basic_painel.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/grafana_basic_painel.png)
-- Evidência de observabilidade (alerta Telegram): [telegram-notification-evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/telegram-notification-evidencia.png)
-- Demo de execução async: [demonstração_async.mp4](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/demonstração_async.mp4)
+- Catálogo consolidado e atualizado de evidências: [doc/04-status-do-projeto.md (seção "Evidências registradas")](./04-status-do-projeto.md).
+- Diretório raiz dos artefatos versionados: [doc/evidencias](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/evidencias).
+- Diretório de evidências visuais e demo: [img](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img).

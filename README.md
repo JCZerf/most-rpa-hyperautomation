@@ -204,6 +204,21 @@ python manage.py runserver 8000
 - Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Cada token aceita somente **1 uso** na rota de consulta; reuso retorna `401`. Tokens HS256 usam `aud` configurado por `OAUTH_AUDIENCE` e assinatura `API_MASTER_KEY` (>=32 chars).
 - Observação técnica: o controle de reuso do token é em memória por processo da API. Para unicidade global com múltiplos workers/instâncias, usar store compartilhado (ex.: Redis).
 
+### Próxima implementação (planejada): Redis para uso único global de token
+- Objetivo: garantir unicidade de uso do token JWT em ambiente distribuído (multi-worker e multi-instância).
+- Estado atual: o bloqueio de reuso (`jti`) funciona por processo (memória local), suficiente para ambiente simples e desenvolvimento.
+- Estratégia planejada:
+  - persistir `jti` em store compartilhado Redis;
+  - usar operação atômica (`SET NX EX`) para aceitar apenas o primeiro consumo;
+  - usar TTL alinhado ao `exp` do token para expurgo automático da chave.
+- Critérios de aceite planejados:
+  - duas requisições simultâneas com o mesmo token devem resultar em `200` + `401`;
+  - o mesmo token não pode ser aceito em instâncias diferentes;
+  - indisponibilidade do Redis deve ter comportamento explícito (fail closed ou fallback controlado por env).
+- Variáveis de ambiente planejadas:
+  - `REDIS_URL` (endereço de conexão);
+  - `TOKEN_REPLAY_STORE` (ex.: `memory` ou `redis`, default inicial `memory` até migração completa).
+
 ### Endpoint principal
 `POST /api/consulta/`
 
