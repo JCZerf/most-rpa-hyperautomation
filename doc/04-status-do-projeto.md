@@ -9,8 +9,8 @@
 - Evidência em Base64 na resposta: **feito** (panorama, ausência de benefício e detalhes quando aplicável).
 - Resposta JSON com panorama + benefícios: **feito** para o escopo principal; detalhes completos dependem da estrutura disponível em cada tela do portal.
 - Logs de execução/falhas: **feito** com eventos estruturados, correlação por `id_consulta` e rastreio de `etapa_falha` via Django/Cloud Logging e logs do robô.
-- Autenticação JWT HS256 via `API_MASTER_KEY`: **feito** (endpoint de token + validação Bearer na consulta).
-- Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, TTL): **feito**.
+- Autenticação JWT HS256 via `API_MASTER_KEY`: **feito** (endpoint de token + validação Bearer na consulta, com token de uso único por requisição).
+- Parametrização por `.env` (SECRET_KEY, API_MASTER_KEY, ALLOWED_HOSTS, `API_TOKEN_TTL` de segurança): **feito**.
 - Integração contínua com GitHub Actions: **feito** (workflows versionados para validação/smoke).
 - Entrega contínua controlada: **feito** (deploy no Cloud Run apenas manual ou por tag de versão `v*`; sem auto deploy em commit/merge de branch).
 - Lote com fila interna (sem limite fixo de 3 entradas): **feito**. Quando excede a capacidade paralela, os blocos aguardam em fila e seguem processando.
@@ -18,9 +18,9 @@
 - Flag de resposta leve sem Base64: **feito** (`incluir_base64=false` por request; default configurável por `BOT_INCLUDE_BASE64_DEFAULT`).
 - Concorrência de requisições HTTP por instância: **configurável** via `GUNICORN_WORKERS` e `GUNICORN_THREADS` (padrão `1x2`, ou seja, até 2 requisições simultâneas por instância).
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
-- Mensagens de erro dos cenários de teste (MOST): **feito** para os cenários principais (CPF/NIS inexistente e nome sem resultado).
+- Mensagens de retorno dos cenários de teste (MOST): **feito** para os cenários principais (incluindo `status="not_found"` em CPF/NIS inexistente e nome sem resultado).
 - Segurança/LGPD: **feito** com mascaramento de identificadores nos logs, autenticação por token e uso de segredos via variáveis de ambiente.
-- E2E smoke em ambiente real (API online): **feito** (`tests/test_e2e_smoke.py` + workflow `.github/workflows/e2e-smoke.yml` com artefatos).
+- E2E smoke em ambiente real (API online): **feito** (`tests/test_e2e_smoke.py` + workflow `.github/workflows/e2e-smoke.yml` com artefatos, emissão de token dedicada por chamada concorrente).
 
 ## Linha do tempo (execução)
 - **Fase 1 — Base técnica (concluída):** bot Playwright, API Django, autenticação, deploy Cloud Run, documentação Swagger.

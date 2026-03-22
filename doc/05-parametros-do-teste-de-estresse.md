@@ -87,7 +87,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/run_stress_monitor.sh
 
 Exemplo (bot direto, 3 consultas):
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
@@ -95,7 +95,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 
 Exemplo (3 consultas simultaneas, `refinar_busca=false`):
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 BOT_REFINAR_BUSCA=false \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -104,7 +104,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 
 Exemplo (3 consultas simultaneas, `refinar_busca=true`):
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 BOT_REFINAR_BUSCA=true \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -116,7 +116,7 @@ Executar em duas etapas com a mesma consulta, mudando apenas `BOT_REFINAR_BUSCA`
 
 1. Consulta unica com `refine=false`
 ```bash
-BOT_CONSULTA='04031769644' \
+BOT_CONSULTA='D ANGELA ALVES DE BARROS FELIPE' \
 BOT_REFINAR_BUSCA=false \
 BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -125,7 +125,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 
 2. Consulta unica com `refine=true`
 ```bash
-BOT_CONSULTA='04031769644' \
+BOT_CONSULTA='D ANGELA ALVES DE BARROS FELIPE' \
 BOT_REFINAR_BUSCA=true \
 BOT_MAX_CONSULTAS_POR_BROWSER=1 \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -203,6 +203,10 @@ Objetivo desta rodada:
 - validar comportamento em condicao real de servidor (`BOT_HEADLESS=true`);
 - registrar custo de CPU/RAM e estabilidade funcional.
 
+Nota historica:
+- esta rodada foi executada quando ainda existia o parametro legado `BOT_MAX_BROWSERS`.
+- no estado atual do projeto, a execucao operacional e sempre com browser fixo em `1`.
+
 Parametros fixos dos dois cenarios:
 - `BOT_HEADLESS=true`
 - `BOT_REFINAR_BUSCA=false`
@@ -216,13 +220,13 @@ Consultas utilizadas (primeiras 8 da `DEFAULT_TEST_CONSULTAS`):
 - `D ANGELA ALVES DE BARROS FELIPE`
 - `E DILA LARISSA RODRIGUES BERTOLDO`
 - `F MAGNIFICAT ZINSOU`
-- `G DEON DA SILVA VIEIRA`
+- `GAABI OLIVEIRA DE MESQUITA`
 - `HA MOHAMMAD OLIUR RAHMAN`
 
 Comandos executados:
 ```bash
 # Cenario 4/2
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","GAABI OLIVEIRA DE MESQUITA","HA MOHAMMAD OLIUR RAHMAN"]' \
 BOT_REFINAR_BUSCA=false \
 BOT_INCLUIR_BASE64=false \
 BOT_HEADLESS=true \
@@ -233,7 +237,7 @@ OUT_BASE_DIR=logs/stress/benchmark-4x2 \
 ./scripts/run_stress_monitor.sh
 
 # Cenario 8/1
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","GAABI OLIVEIRA DE MESQUITA","HA MOHAMMAD OLIUR RAHMAN"]' \
 BOT_REFINAR_BUSCA=false \
 BOT_INCLUIR_BASE64=false \
 BOT_HEADLESS=true \
@@ -265,7 +269,7 @@ Artefatos desta rodada:
 ### Conclusao tecnica desta rodada
 - Em **consumo de hardware (CPU/RAM)**, o cenario que se saiu melhor foi **`8/1`**.
 - Em **estabilidade funcional de raspagem**, o cenario que se saiu melhor foi **`4/2`**.
-- Leitura operacional: a diferenca de tempo total foi pequena, mas a diferenca de sucesso foi grande. Para producao, `4/2` segue mais seguro hoje.
+- Leitura operacional da rodada: a diferenca de tempo total foi pequena, mas a diferenca de sucesso foi grande.
 - Sinal de saturacao: os dois cenarios encostaram no limite de memoria do container (aprox. 2 GB), indicando que o gargalo de RAM continua relevante.
 
 ## Benchmark decisivo registrado (22/03/2026) - concorrencia reduzida
@@ -276,11 +280,12 @@ Objetivo desta rodada:
 
 Nota:
 - esta rodada foi executada antes da remocao definitiva do parametro `BOT_MAX_BROWSERS`; os valores estao mantidos aqui apenas como historico de evidencia.
+- no estado atual do projeto, os comandos abaixo servem apenas para rastreabilidade de benchmark antigo.
 
 Comandos executados:
 ```bash
 # Cenario 4/1
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","GAABI OLIVEIRA DE MESQUITA","HA MOHAMMAD OLIUR RAHMAN"]' \
 BOT_REFINAR_BUSCA=false \
 BOT_INCLUIR_BASE64=false \
 BOT_HEADLESS=true \
@@ -291,7 +296,7 @@ OUT_BASE_DIR=logs/stress/benchmark-4x1 \
 ./scripts/run_stress_monitor.sh
 
 # Cenario 2/2
-BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","G DEON DA SILVA VIEIRA","HA MOHAMMAD OLIUR RAHMAN"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO","D ANGELA ALVES DE BARROS FELIPE","E DILA LARISSA RODRIGUES BERTOLDO","F MAGNIFICAT ZINSOU","GAABI OLIVEIRA DE MESQUITA","HA MOHAMMAD OLIUR RAHMAN"]' \
 BOT_REFINAR_BUSCA=false \
 BOT_INCLUIR_BASE64=false \
 BOT_HEADLESS=true \
@@ -328,7 +333,7 @@ Artefatos desta rodada:
 
 ### Validacao pos-ajuste (22/03/2026)
 Objetivo:
-- confirmar o comportamento apos remocao do parametro `BOT_MAX_BROWSERS` no codigo/configuracao executavel;
+- confirmar o comportamento apos remocao do parametro `BOT_MAX_BROWSERS` no codigo/configuracao executavel (confirmado);
 - validar coerencia do retorno em lote.
 
 Execucao registrada:

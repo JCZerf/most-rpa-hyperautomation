@@ -1,20 +1,40 @@
+import os
+
 import pytest
 from rest_framework.test import APIClient
 
 
+TEST_OAUTH_CLIENT_ID = os.getenv("TEST_OAUTH_CLIENT_ID", "test-client-id")
+TEST_OAUTH_CLIENT_SECRET = os.getenv("TEST_OAUTH_CLIENT_SECRET", "test-client-secret")
+TEST_DJANGO_SECRET_KEY = os.getenv(
+    "TEST_DJANGO_SECRET_KEY",
+    "test-secret-1234567890abcdef1234567890abcdef",
+)
+TEST_API_MASTER_KEY = os.getenv(
+    "TEST_API_MASTER_KEY",
+    "test-master-key-1234567890abcdef1234567890",
+)
+TEST_OAUTH_AUDIENCE = os.getenv("TEST_OAUTH_AUDIENCE", "most-rpa-api")
+TEST_API_TOKEN_TTL = int(os.getenv("TEST_API_TOKEN_TTL", "600"))
+
+
 @pytest.fixture
 def client(settings):
-    settings.OAUTH_CLIENT_ID = "client-id"
-    settings.OAUTH_CLIENT_SECRET = "client-secret"
-    settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
-    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
-    settings.API_TOKEN_TTL = 600
-    settings.OAUTH_AUDIENCE = "most-rpa-api"
+    settings.OAUTH_CLIENT_ID = TEST_OAUTH_CLIENT_ID
+    settings.OAUTH_CLIENT_SECRET = TEST_OAUTH_CLIENT_SECRET
+    settings.SECRET_KEY = TEST_DJANGO_SECRET_KEY
+    settings.API_MASTER_KEY = TEST_API_MASTER_KEY
+    settings.API_TOKEN_TTL = TEST_API_TOKEN_TTL
+    settings.OAUTH_AUDIENCE = TEST_OAUTH_AUDIENCE
 
     api_client = APIClient()
     resp = api_client.post(
         "/api/token/",
-        data={"grant_type": "client_credentials", "client_id": "client-id", "client_secret": "client-secret"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
+        },
         format="json",
     )
     token = resp.json()["access_token"]
@@ -75,16 +95,56 @@ def test_consulta_missing_token():
     assert resp.status_code == 401
 
 
+def test_consulta_token_uso_unico_exige_nova_autenticacao(settings, monkeypatch):
+    settings.OAUTH_CLIENT_ID = TEST_OAUTH_CLIENT_ID
+    settings.OAUTH_CLIENT_SECRET = TEST_OAUTH_CLIENT_SECRET
+    settings.SECRET_KEY = TEST_DJANGO_SECRET_KEY
+    settings.API_MASTER_KEY = TEST_API_MASTER_KEY
+    settings.OAUTH_AUDIENCE = TEST_OAUTH_AUDIENCE
+
+    monkeypatch.setattr(
+        "api.views._run_single",
+        lambda consulta_param, refine_param, incluir_base64: {"status": "ok", "pessoa": {"nome": "Teste"}, "beneficios": []},
+    )
+
+    api_client = APIClient()
+    token_resp = api_client.post(
+        "/api/token/",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
+        },
+        format="json",
+    )
+    assert token_resp.status_code == 200
+
+    token = token_resp.json()["access_token"]
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    resp_1 = api_client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
+    assert resp_1.status_code == 200
+
+    resp_2 = api_client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
+    assert resp_2.status_code == 401
+    assert resp_2.json()["status"] == "error"
+
+
 def test_consulta_insufficient_scope(settings, monkeypatch):
-    settings.OAUTH_CLIENT_ID = "client-id"
-    settings.OAUTH_CLIENT_SECRET = "client-secret"
-    settings.SECRET_KEY = "test-secret-1234567890abcdef1234567890abcdef"
-    settings.API_MASTER_KEY = "test-master-key-1234567890abcdef1234567890"
-    settings.OAUTH_AUDIENCE = "most-rpa-api"
+    settings.OAUTH_CLIENT_ID = TEST_OAUTH_CLIENT_ID
+    settings.OAUTH_CLIENT_SECRET = TEST_OAUTH_CLIENT_SECRET
+    settings.SECRET_KEY = TEST_DJANGO_SECRET_KEY
+    settings.API_MASTER_KEY = TEST_API_MASTER_KEY
+    settings.OAUTH_AUDIENCE = TEST_OAUTH_AUDIENCE
     api_client = APIClient()
     resp_token = api_client.post(
         "/api/token/",
-        data={"grant_type": "client_credentials", "client_id": "client-id", "client_secret": "client-secret", "scope": "bot:read"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": TEST_OAUTH_CLIENT_ID,
+            "client_secret": TEST_OAUTH_CLIENT_SECRET,
+            "scope": "bot:read",
+        },
         format="json",
     )
     assert resp_token.status_code == 200

@@ -47,30 +47,30 @@
 | Cenário | Entrada | Saída esperada |
 |---------|---------|----------------|
 | Sucesso (CPF) | CPF ou NIS válido | JSON com dados coletados e evidência da tela. |
-| Erro (CPF) | CPF ou NIS inexistente | JSON com mensagem de erro: "Não foi possível retornar os dados no tempo de resposta solicitado". |
+| Sem resultado (CPF) | CPF ou NIS inexistente | JSON com `status="not_found"` e mensagem: "Não foi possível retornar os dados no tempo de resposta solicitado". |
 | Sucesso (Nome) | Nome completo | JSON com dados do registro mais próximo por score de nome + evidência. |
-| Erro (Nome) | Nome inexistente | JSON com mensagem de erro: "Foram encontrados 0 resultados para o termo …". |
+| Sem resultado (Nome) | Nome inexistente | JSON com `status="not_found"` e mensagem: "Foram encontrados 0 resultados para o termo …". |
 | Filtrado | Sobrenome + filtro social | JSON com dados do registro mais próximo por score de nome + evidência. |
 
 ## Contrato de resposta da API
 - **Consulta única com sucesso (`200`)**: retorna objeto raiz com `pessoa`, `beneficios` e `meta`.
-- **Consulta única sem resultado de negócio (`200`)**: retorna `status="error"`, `error`, `beneficios=[]` e `meta` com evidência em Base64.
-- **Lote (`200`)**: retorna `resultados[]`, cada item com `consulta`, `status` (`ok`, `invalid` ou `error`) e `resultado`/`error`.
+- **Consulta única sem resultado de negócio (`200`)**: retorna `status="not_found"`, `pessoa` com `N/A`, `beneficios=[]` e `meta` com mensagem/evidência.
+- **Lote (`200`, `207` ou `502`)**: retorna `resultados[]`, cada item com `consulta`, `status` (`ok`, `not_found`, `invalid` ou `error`) e `resultado`/`error`.
 - **Erros de protocolo/autenticação**:
   - `400`: payload inválido, lista vazia ou entrada inválida.
-  - `401`: token ausente, inválido ou expirado.
+  - `401`: token ausente, inválido, expirado ou reutilizado (uso único).
   - `403`: escopo insuficiente.
   - `500`: falha inesperada no processamento.
 
 ## Exemplos de payload (consulta)
 - **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta em lote simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}`
+- **Consulta em lote simples**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": false}`
 - **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta em lote avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}`
+- **Consulta em lote avançada**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": true}`
 - **Consulta leve (sem evidências Base64)**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
 
 ## Decisões de implementação deste projeto
-- Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada.
+- Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada e **uso único por consulta**.
 - Configuração por variáveis de ambiente para API e bot, com descrição funcional centralizada no [README (Referência de variáveis de ambiente)](../README.md#env-reference).
 - Batch com fila interna para excedentes; paralelismo operacional configurável por ambiente via `BOT_MAX_CONSULTAS_POR_BROWSER` (browser fixo em 1).
 - Nome de campo de API padronizado para `refinar_busca` (campo único aceito para refinamento).

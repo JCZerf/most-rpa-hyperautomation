@@ -19,7 +19,7 @@ from bot.orchestrator import (
     remover_imagens_base64,
 )
 from bot.validators import mascarar_identificador
-from .auth import issue_token, validate_token, scope_allows
+from .auth import consume_token_once, issue_token, validate_token, scope_allows
 from .metrics import (
     API_CONSULTA_REQUESTS_TOTAL,
     API_CONSULTA_BATCH_SIZE,
@@ -169,6 +169,8 @@ def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -
         "- Consulta unitária simples: {\"consulta\":\"...\",\"refinar_busca\":false}\n"
         "- Consulta em lote simples: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":false}\n"
         "- Consulta em lote avançada: {\"consultas\":[\"...\",\"...\"],\"refinar_busca\":true}\n\n"
+        "Autenticação obrigatória por requisição: cada token Bearer é de uso único "
+        "(a cada consulta, gere um novo token em `/api/token/`).\n\n"
         "Paralelismo padrão: 1 browser, até 4 consultas por abas em paralelo. "
         "Quando excede essa capacidade, os blocos entram em fila interna (sem rejeição por tamanho apenas por volume).\n\n"
         "Também há exemplos avançados com refinar_busca=true (lote simples).\n\n"
@@ -319,6 +321,8 @@ def consulta(request: Request):
         return JsonResponse({"status": "error", "error": "Invalid or expired token"}, status=401)
     if not scope_allows(claims, ["bot:read"]):
         return JsonResponse({"status": "error", "error": "Insufficient scope"}, status=403)
+    if not consume_token_once(claims):
+        return JsonResponse({"status": "error", "error": "Invalid or expired token"}, status=401)
 
     payload = request.data if isinstance(request.data, dict) else {}
     incluir_base64 = _resolve_include_base64_flag(payload, default=DEFAULT_INCLUDE_BASE64)
@@ -494,8 +498,11 @@ def consulta(request: Request):
 @extend_schema(
     methods=['POST'],
     tags=["Autenticação"],
-    summary="Gerar token de acesso (OAuth2 client_credentials)",
-    description="Envie grant_type=client_credentials, client_id e client_secret para receber um JWT HS256.",
+    summary="Gerar token de acesso (OAuth2 client_credentials, uso único)",
+    description=(
+        "Envie grant_type=client_credentials, client_id e client_secret para receber um JWT HS256. "
+        "Cada token pode ser usado uma única vez no endpoint `/api/consulta/`."
+    ),
     examples=[
         OpenApiExample(
             'Requisição de token',
@@ -527,7 +534,7 @@ def consulta(request: Request):
 @api_view(['POST'])
 def token(request: Request):
     """
-    Fluxo client_credentials: devolve access_token curto.
+    Fluxo client_credentials: devolve access_token de uso único.
     """
     data = request.data if isinstance(request.data, dict) else {}
     grant_type = data.get("grant_type")

@@ -47,7 +47,7 @@
 ## Entradas e saídas
 - **Entradas obrigatórias:** CPF, nome ou NIS (ao menos um).
 - **Entrada opcional:** beneficiário de programa social.
-- **Saída:** JSON contendo dados do panorama, detalhes de benefícios (Auxílio Brasil, Auxílio Emergencial, Bolsa Família) e imagem Base64 da tela.
+- **Saída:** JSON contendo dados do panorama, detalhes de benefícios (Auxílio Brasil, Auxílio Emergencial, Bolsa Família) e evidências em Base64 da tela (quando habilitadas).
 
 ## Critérios de sucesso (iniciais)
 - Execução ponta a ponta sem intervenção manual para casos válidos.

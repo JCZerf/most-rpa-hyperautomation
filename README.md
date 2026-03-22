@@ -32,7 +32,7 @@ most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
-├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
+├── img/                      # Evidências visuais (integrações, observabilidade e demo)
 ├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
 ├── output/                   # Resultados JSON gerados nas execuções locais (runtime)
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
@@ -167,7 +167,7 @@ BOT_CONSULTA='04031769644' COMPOSE_FILE=docker-compose.bot-stress.yml ./scripts/
 Lote de consultas (com fila quando exceder a capacidade paralela):
 
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
 ./scripts/run_stress_monitor.sh
 ```
@@ -175,7 +175,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 Configuração padrão do modo async (1 browser fixo x 4 abas simultâneas):
 
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=false \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -183,7 +183,7 @@ COMPOSE_FILE=docker-compose.bot-stress.yml \
 ```
 
 ```bash
-BOT_CONSULTAS_JSON='["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"]' \
+BOT_CONSULTAS_JSON='["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"]' \
 BOT_MAX_CONSULTAS_POR_BROWSER=4 \
 BOT_REFINAR_BUSCA=true \
 COMPOSE_FILE=docker-compose.bot-stress.yml \
@@ -196,21 +196,22 @@ python manage.py runserver 8000
 ```
 - Documentação interativa (Swagger): `http://127.0.0.1:8000/api/docs/`
 - Esquema OpenAPI (YAML/JSON): `http://127.0.0.1:8000/api/schema/`
-- Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. Tokens HS256 são assinados com `API_MASTER_KEY` (mín. 32 chars) e expiram após o TTL configurado (`API_TOKEN_TTL`).
+- Autorização: obtenha um token OAuth2 (client_credentials) em `POST /api/token/` enviando `client_id` e `client_secret`; use o token retornado no header `Authorization: Bearer <token>`. O token é **de uso único** (cada chamada em `/api/consulta/` precisa de autenticação nova). Tokens HS256 são assinados com `API_MASTER_KEY` (mín. 32 chars) e têm expiração de segurança (`API_TOKEN_TTL`) caso não sejam usados.
 
 ### Autenticação (OAuth2 client_credentials simplificado)
 - `POST /api/token/` com corpo `{"grant_type": "client_credentials", "client_id": "<ID>", "client_secret": "<SECRET>", "scope": "bot:read"}`.
-- Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL = `API_TOKEN_TTL`.
-- Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Tokens HS256, `aud` configurado por `OAUTH_AUDIENCE`, expiram após `API_TOKEN_TTL` segundos, e são assinados com `API_MASTER_KEY` (>=32 chars).
+- Mapeamento de variáveis de ambiente: `client_id` = `OAUTH_CLIENT_ID`, `client_secret` = `OAUTH_CLIENT_SECRET`, audience = `OAUTH_AUDIENCE`, TTL de segurança para token não usado = `API_TOKEN_TTL`.
+- Use o `access_token` retornado no header `Authorization: Bearer <token>` ao chamar `/api/consulta/`. Cada token aceita somente **1 uso** na rota de consulta; reuso retorna `401`. Tokens HS256 usam `aud` configurado por `OAUTH_AUDIENCE` e assinatura `API_MASTER_KEY` (>=32 chars).
+- Observação técnica: o controle de reuso do token é em memória por processo da API. Para unicidade global com múltiplos workers/instâncias, usar store compartilhado (ex.: Redis).
 
 ### Endpoint principal
 `POST /api/consulta/`
 
 Payloads aceitos:
 - **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta em lote simples**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": false}`
+- **Consulta em lote simples**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": false}`
 - **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta em lote avançada**: `{"consultas": ["04031769644", "A ANNE CHRISTINE SILVA RIBEIRO"], "refinar_busca": true}`
+- **Consulta em lote avançada**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": true}`
 - **Flag opcional de resposta leve**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
 
 Paralelismo padrão do bot async por requisição:
@@ -223,7 +224,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 ### Fluxo Make validado (entrada webhook -> API -> Drive/Sheets -> resposta única)
 - Entrada recomendada no webhook do Make: usar sempre `consultas` como array dinâmico (1..N itens), evitando itens fixos vazios.
 - Exemplo de entrada (1 item): `{"consultas":["04031769644"],"refinar_busca":true}`
-- Exemplo de entrada (3 itens): `{"consultas":["04031769644","A ANNE CHRISTINE SILVA RIBEIRO","A LIDA PEREIRA FIALHO"],"refinar_busca":true}`
+- Exemplo de entrada (3 itens): `{"consultas":["A DILA DA SILVA BRITO LIMA","BA N TCHI OLIVE CONFORTE N DAH KOUAGOU","CAA SANTOS BARROS MACHADO"],"refinar_busca":true}`
 - Chamada da API: repassar o array `consultas` sem posições fixas para evitar `null` no payload.
 - Pós-processamento: `Parse JSON` -> `Iterator` em `resultados[]` -> `Google Drive` -> `Google Sheets`.
 - Mapeamento após iterator: usar campos do bundle do `Iterator` (ex.: `consulta`, `status`, `resultado.*`), não campos do payload bruto do HTTP.
@@ -371,7 +372,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 | HTTP | Quando acontece | Exemplo |
 |------|------------------|---------|
 | `400` | payload inválido, lista vazia, entrada inválida no single | `{"status":"error","error":"Lista \"consultas\" vazia"}` |
-| `401` | sem token ou token inválido/expirado | `{"status":"error","error":"Missing bearer token"}` |
+| `401` | sem token, token inválido/expirado ou token reutilizado | `{"status":"error","error":"Invalid or expired token"}` |
 | `403` | token sem escopo `bot:read` | `{"status":"error","error":"Insufficient scope"}` |
 | `207` | lote com sucesso parcial (mistura de itens ok e erro/invalid) | `{"resultados":[{"status":"ok"},{"status":"error"}]}` |
 | `500` | falha inesperada no processamento da API | `{"status":"error","error":"<mensagem-interna>"}` |
@@ -409,7 +410,7 @@ Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-
 | `API_MASTER_KEY` | Sim | - | Chave usada para assinar/validar JWT HS256 no fluxo de autenticação. |
 | `ALLOWED_HOSTS` | Sim (produção) | `127.0.0.1,localhost` | Define hosts/domínios permitidos pelo Django. |
 | `DEBUG` | Não | `False` | Liga/desliga modo de depuração do Django. |
-| `API_TOKEN_TTL` | Não | `600` | Tempo de vida do token OAuth (`/api/token/`), em segundos. |
+| `API_TOKEN_TTL` | Não | `600` | Janela de expiração de segurança para token ainda não utilizado (`/api/token/`), em segundos. |
 | `OAUTH_CLIENT_ID` | Sim | - | `client_id` aceito no endpoint de token. |
 | `OAUTH_CLIENT_SECRET` | Sim | - | `client_secret` aceito no endpoint de token. |
 | `OAUTH_AUDIENCE` | Não | `most-rpa-api` | Claim `aud` emitido/validado no token JWT. |
@@ -456,7 +457,7 @@ Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pyte
 
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
-- Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), reduzindo risco de regressão por intermitência de UI externa.
+- Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), cada uma com seu próprio token de uso único, reduzindo risco de regressão por intermitência de UI externa.
 - Variáveis necessárias:
   - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
   - `E2E_CLIENT_ID`
@@ -474,7 +475,7 @@ E2E_CONSULTA_REFINADA=... \
 E2E_REQUIRE_SUCCESS=true \
 ./venv/bin/pytest -q tests/test_e2e_smoke.py -m e2e
 ```
-- Artefatos são salvos em `output/e2e-artifacts/` (respostas, status HTTP, durações e `junit.xml` no CI).
+- Artefatos são salvos em `output/e2e-artifacts/` (inclui `01_tokens.json`, respostas, status HTTP, durações e `junit.xml` no CI).
 
 ### GitHub Actions (E2E)
 - Workflow: `.github/workflows/e2e-smoke.yml`
@@ -489,8 +490,15 @@ E2E_REQUIRE_SUCCESS=true \
 
 ### Evidências de integrações externas
 - Google Sheets (registro da execução): [google_sheets_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia.png)
+- Google Sheets (registro da execução - versão atualizada): [google_sheets_evidencia_V2.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_sheets_evidencia_V2.png)
 - Google Drive (arquivo gerado): [google_driver_evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/google_driver_evidencia.png)
 - Make (workflow/orquestração): [make_evidencia_workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/make_evidencia_workflow.png)
+- Make (visão geral de fluxo): [workflow.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/workflow.png)
+- Demo de execução async (vídeo): [demonstração_async.mp4](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/demonstração_async.mp4)
+
+### Evidências de observabilidade
+- Dashboard Grafana: [grafana_basic_painel.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/grafana_basic_painel.png)
+- Notificação Telegram (alerta): [telegram-notification-evidencia.png](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/img/telegram-notification-evidencia.png)
 
 ## Estrutura de saída (resumo)
 - `id_consulta`: UUID da execução (sempre presente).

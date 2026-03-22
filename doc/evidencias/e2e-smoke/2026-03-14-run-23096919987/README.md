@@ -8,6 +8,10 @@ Arquivos esperados:
 - `03_consulta_refinar_true.json`
 - `junit.xml`
 
+Nota de versao:
+- Este pacote e historico (14/03/2026), anterior ao ajuste de token de uso unico por chamada concorrente.
+- No estado atual do teste E2E, o artefato equivalente e `01_tokens.json`.
+
 Origem:
 - Run ID: `23096919987`
 - Artifact ID: `5927065475`
