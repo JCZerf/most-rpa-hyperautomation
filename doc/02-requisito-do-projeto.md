@@ -24,12 +24,14 @@
 | RF-09 | Publicar o JSON estruturado da execução em pasta controlada no Google Drive para auditoria. | Should (Médio) |
 | RF-10 | Registrar os dados consolidados da execução em planilha estruturada no Google Sheets. | Should (Médio) |
 | RF-11 | Orquestrar o fluxo ponta a ponta em hiperautomação no Make (entrada, chamada da API, gravação em Drive/Sheets e retorno de status). | Should (Médio) |
+| RF-12 | Expor métricas operacionais da API em endpoint compatível com Prometheus (`/metrics`) para coleta e acompanhamento. | Could (Baixo) |
+| RF-13 | Disparar notificação de alerta operacional via Grafana (ex.: Telegram) a partir de regras configuradas de observabilidade. | Could (Baixo) |
 
 ## Restrições e considerações
 - Sem intervenção manual durante a execução normal; falhas devem ser sinalizadas via log/retorno.
 - A automação depende da disponibilidade e layout do Portal da Transparência; mudanças podem exigir atualização de seletores.
 - O uso de dados pessoais deve seguir políticas internas e LGPD (armazenamento transitório, mínimo necessário).
-- Sem limite fixo de 3 entradas por requisição (batch): o processamento usa fila interna quando o volume excede o paralelismo configurado.
+- A requisição em lote aceita de `1..N` entradas; quando o volume excede o paralelismo configurado, as consultas excedentes entram em fila interna e são processadas progressivamente no mesmo request.
 - Paralelismo padrão do bot async: `1` browser fixo e até `4` consultas por abas (configurável via `BOT_MAX_CONSULTAS_POR_BROWSER`).
 - Validação prévia de CPF/NIS/nomes; entradas inválidas são rejeitadas sem abrir navegador; logs mascaram identificadores.
 
@@ -40,8 +42,12 @@
 | Qualidade técnica | Código modular (navegação, extração, validação e API), tratamento explícito de erros e manutenção facilitada. |
 | Integração ponta a ponta | Orquestração com Make e persistência estruturada em Google Drive/Sheets quando o fluxo externo estiver habilitado. |
 | Segurança e acesso | Autenticação por token, gestão de segredos por ambiente e validação de entrada antes de abrir navegador. |
-| Observabilidade | Logs de execução/falha com rastreabilidade por etapa, `id_consulta` e metadados de auditoria. |
+| Observabilidade | Logs de execução/falha com rastreabilidade por etapa, `id_consulta`, métricas Prometheus, dashboards Grafana e alerta via Telegram (validados em ambiente local). |
 | Documentação operacional | README e documentos `doc/` alinhados com contrato da API, execução local/cloud e evidências de integração. |
+
+Nota de escopo de infraestrutura (desafio):
+- A stack de observabilidade (`Prometheus + Grafana + alertas Telegram`) foi validada e está funcionando localmente.
+- Esta stack não foi mantida em cloud nesta fase para evitar custo recorrente desnecessário no contexto do desafio.
 
 ## Cenários de testes validados
 | Cenário | Entrada | Saída esperada |
@@ -63,11 +69,14 @@
   - `500`: falha inesperada no processamento.
 
 ## Exemplos de payload (consulta)
-- **Consulta unitária simples**: `{"consulta": "04031769644", "refinar_busca": false}`
-- **Consulta em lote simples**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": false}`
-- **Consulta unitária avançada**: `{"consulta": "04031769644", "refinar_busca": true}`
-- **Consulta em lote avançada**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU"], "refinar_busca": true}`
-- **Consulta leve (sem evidências Base64)**: `{"consulta": "04031769644", "refinar_busca": true, "incluir_base64": false}`
+- Use `consulta` para requisição unitária e `consultas` para lote (`1..N` entradas).
+- **Consulta unitária simples (CPF)**: `{"consulta": "04031769644", "refinar_busca": false}`
+- **Consulta unitária simples (nome)**: `{"consulta": "GAABI OLIVEIRA DE MESQUITA", "refinar_busca": false}`
+- **Consulta em lote simples**: `{"consultas": ["GAABI OLIVEIRA DE MESQUITA", "HAABE OLIVEIRA DA SILVA", "D ANGELA ALVES DE BARROS FELIPE", "I DINA APARECIDA DA SILVA GARCIA"], "refinar_busca": false}`
+- **Consulta unitária avançada**: `{"consulta": "GAABI OLIVEIRA DE MESQUITA", "refinar_busca": true}`
+- **Consulta em lote avançada**: `{"consultas": ["GAABI OLIVEIRA DE MESQUITA", "HAABE OLIVEIRA DA SILVA", "D ANGELA ALVES DE BARROS FELIPE", "I DINA APARECIDA DA SILVA GARCIA"], "refinar_busca": true}`
+- **Consulta em lote gigante (12 itens, sem evidências Base64)**: `{"consultas": ["A DILA DA SILVA BRITO LIMA", "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU", "CAA SANTOS BARROS MACHADO", "D ANGELA ALVES DE BARROS FELIPE", "E DILA LARISSA RODRIGUES BERTOLDO", "F MAGNIFICAT ZINSOU", "GAABI OLIVEIRA DE MESQUITA", "HA MOHAMMAD OLIUR RAHMAN", "HAABE OLIVEIRA DA SILVA", "I DINA APARECIDA DA SILVA GARCIA", "J QUECEMIRA BATISTA DOS SANTOS", "K TIANA MARLEN SILVA ARAUJO"], "refinar_busca": true, "incluir_base64": false}`
+- **Consulta leve (sem evidências Base64)**: `{"consulta": "HAABE OLIVEIRA DA SILVA", "refinar_busca": true, "incluir_base64": false}`
 
 ## Decisões de implementação deste projeto
 - Autenticação adotada: Bearer token JWT HS256 com `API_MASTER_KEY` dedicada e **uso único por consulta**.
