@@ -12,61 +12,49 @@ Nos testes com Docker Compose, o valor efetivo pode vir de:
 Exemplo atual do projeto: `.env` possui `BOT_MAX_WORKERS=3`, portanto esse tende a ser o valor efetivo quando nao sobrescrito no comando.
 
 ## Escopo dos testes disponiveis (estado real)
-- Ambiente de execucao (ambos): container Docker com limite de **3 CPU** e **2 GB RAM**.
-- Coleta automatica (ambos): script [`scripts/run_stress_monitor.sh`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/scripts/run_stress_monitor.sh).
-- Saida de monitoramento (ambos): CSV de `docker stats` + logs do container.
+- Ambiente de execucao: container Docker com limite de **3 CPU** e **2 GB RAM**.
+- Coleta automatica: script [`scripts/run_stress_monitor.sh`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/scripts/run_stress_monitor.sh).
+- Saida de monitoramento: CSV de `docker stats` + logs do container.
 
-Modos:
-
-1. API (Gunicorn)
-   - Compose: [`docker-compose.stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.stress.yml)
-   - Observacao: sem `STRESS_LOAD_COMMAND`, mede baseline/idle.
-2. Bot direto (sem API)
+Modo atual:
+1. Bot direto (sem API)
    - Compose: [`docker-compose.bot-stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.bot-stress.yml)
    - Runner: [`scripts/run_bot_batch.py`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/scripts/run_bot_batch.py)
    - Observacao: roda consultas do bot direto, sem HTTP.
 
-## Parametros de infraestrutura (docker-compose.stress.yml)
-Fonte: [`docker-compose.stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.stress.yml)
+## Parametros de infraestrutura (docker-compose.bot-stress.yml)
+Fonte: [`docker-compose.bot-stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.bot-stress.yml)
 
 | Parametro | Valor atual | Impacto na metrica |
 |---|---:|---|
 | `cpus` | `3.0` | Define teto de CPU disponivel para o container. |
 | `mem_limit` | `2g` | Define teto de memoria RAM disponivel. |
 | `memswap_limit` | `2g` | Impede uso adicional de swap alem do limite de memoria. |
-| `ports` | `8000:8000` | Exposicao local da API para geracao de carga externa. |
 | `restart` | `no` | Nao reinicia automaticamente apos falha (falhas aparecem claramente no teste). |
-
-Os mesmos limites de recurso tambem sao usados em:
-- [`docker-compose.bot-stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.bot-stress.yml)
 
 ## Parametros de runtime da aplicacao no teste
 Fontes:
-- [`docker-compose.stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.stress.yml)
+- [`docker-compose.bot-stress.yml`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/docker-compose.bot-stress.yml)
 - [`Dockerfile`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/Dockerfile)
 
 | Parametro | Valor atual | Impacto na metrica |
 |---|---:|---|
-| `GUNICORN_WORKERS` | `1` | Menos paralelismo de processos; menor consumo de RAM por processo. |
-| `GUNICORN_THREADS` | `2` | Concorrencia leve por threads no mesmo worker. |
-| `BOT_MAX_WORKERS` | `1` | Limita paralelismo interno do bot por requisicao na API. |
-| `PORT` | `8000` | Porta de escuta da aplicacao. |
-| `gunicorn --timeout` | `600` (default do CMD) | Requisicoes longas nao encerram cedo; pode aumentar ocupacao de recursos sob carga. |
-| `gunicorn --graceful-timeout` | `30` (default do CMD) | Tempo de finalizacao graciosa. |
-| `gunicorn --keep-alive` | `65` (default do CMD) | Mantem conexoes por mais tempo; pode afetar uso de recursos em carga HTTP. |
+| `BOT_MAX_WORKERS` | `1` | Limita paralelismo interno do bot por execucao em lote. |
+| `BOT_HEADLESS` | `true` | Execucao sem interface grafica. |
+| `PYTHONPATH` | `/app` | Garante importacao dos modulos do projeto no container. |
 
 ## Parametros do script de monitoramento
 Fonte: [`scripts/run_stress_monitor.sh`](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/scripts/run_stress_monitor.sh)
 
 | Parametro | Default atual | Impacto na metrica |
 |---|---:|---|
-| `COMPOSE_FILE` | `docker-compose.stress.yml` | Define qual stack sera monitorada. |
+| `COMPOSE_FILE` | `docker-compose.bot-stress.yml` | Define qual stack sera monitorada. |
 | `SERVICE_NAME` | `bot-stress` | Define qual servico sera observado. |
 | `DURATION_SECONDS` | `300` | Janela total de observacao (5 min). |
 | `SAMPLE_INTERVAL_SECONDS` | `2` | Frequencia de coleta (`docker stats` a cada 2s). |
 | `OUT_BASE_DIR` | `logs/stress` | Pasta base dos artefatos de teste. |
 | `AUTO_DOWN` | `1` | Derruba stack ao fim do teste (isola execucoes). |
-| `STRESS_LOAD_COMMAND` | vazio | Sem carga ativa por padrao. |
+| `STRESS_LOAD_COMMAND` | vazio | Opcional; em modo bot direto normalmente fica vazio. |
 
 ## Parametros de execucao do bot direto (sem API)
 Fontes:

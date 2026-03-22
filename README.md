@@ -33,11 +33,14 @@ most-rpa-hyperautomation/
 ├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
 ├── img/                      # Evidências visuais de integrações externas (Make/Drive/Sheets)
-├── output/                   # Resultados JSON gerados nas execuções locais
+├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
+├── output/                   # Resultados JSON gerados nas execuções locais (runtime)
 ├── tests/                    # Testes unitários/API (com mocks para o navegador)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
+├── docker-compose.observability.yml  # Stack local Prometheus + Grafana
+├── docker-compose.bot-stress.yml     # Stress do bot sem API
 ├── example.env               # Template de variáveis de ambiente
 ├── main.py                   # Runner local para execuções em lote
 ├── manage.py                 # Comando de gerenciamento Django
@@ -88,32 +91,23 @@ Swagger: `http://127.0.0.1:8000/api/docs/`
 Implementação base da observabilidade com métricas da API em `GET /metrics` e coleta via Prometheus.
 
 Arquivos principais:
-- `docker-compose.prometheus.yml`
+- `docker-compose.observability.yml`
 - `monitoring/prometheus/prometheus.yml`
 - instrumentação em `web/settings.py` e `web/urls.py`
+
+## Observabilidade - Grafana (fase 2)
+Dashboard visual sobre as métricas do Prometheus, sem depender da leitura direta de PromQL.
+
+Arquivos principais:
+- `docker-compose.observability.yml`
+- `monitoring/grafana/provisioning/datasources/prometheus.yml`
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml`
+- `monitoring/grafana/dashboards/most-rpa-api-overview.json`
 
 Guia completo (catálogo de métricas, interpretação e PromQL):  
 [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 
-## Teste de estresse com hardware limitado (2GB RAM / 3 CPU)
-Use o compose dedicado para simular ambiente restrito:
-
-```bash
-docker compose -f docker-compose.stress.yml up --build
-```
-
-Com o serviço rodando, acompanhe consumo em tempo real:
-
-```bash
-docker stats most-rpa-bot-stress
-```
-
-Para encerrar:
-
-```bash
-docker compose -f docker-compose.stress.yml down
-```
-
+## Teste de estresse do bot (2GB RAM / 3 CPU)
 ### Script de monitoramento (CPU/RAM + logs)
 Para automatizar a coleta de metricas e logs durante o teste:
 
@@ -132,14 +126,7 @@ Exemplo com duracao e intervalo customizados:
 DURATION_SECONDS=600 SAMPLE_INTERVAL_SECONDS=1 ./scripts/run_stress_monitor.sh
 ```
 
-Exemplo com carga paralela (fazendo chamadas para API enquanto monitora):
-
-```bash
-STRESS_LOAD_COMMAND='for i in {1..30}; do curl -s http://127.0.0.1:8000/api/docs/ >/dev/null; done' ./scripts/run_stress_monitor.sh
-```
-
-### Teste de estresse do bot sem API (consulta direta)
-Nesse modo, o container executa o bot diretamente (sem Gunicorn/API) e finaliza ao concluir as consultas.
+Teste em modo bot (sem API): o container executa o bot diretamente e finaliza ao concluir as consultas.
 
 Consulta unica (padrao do compose):
 
@@ -223,7 +210,7 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Escolhas e desafios: [doc/03-escolhas-e-desafios-tecnicos.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/03-escolhas-e-desafios-tecnicos.md)
 - Status e roadmap: [doc/04-status-do-projeto.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md)
 - Parametros de teste de estresse: [doc/05-parametros-do-teste-de-estresse.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/05-parametros-do-teste-de-estresse.md)
-- Observabilidade (Prometheus): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
+- Observabilidade (Prometheus + Grafana): [doc/06-observabilidade.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/06-observabilidade.md)
 
 ## Aderência ao enunciado MOST
 - Parte 1 (obrigatória): **implementada** com Playwright headless, extração de panorama/benefícios e evidências Base64.

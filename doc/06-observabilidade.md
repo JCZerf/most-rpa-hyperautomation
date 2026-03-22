@@ -1,30 +1,43 @@
-# Observabilidade (Prometheus) - Guia de uso
+# Observabilidade (Prometheus + Grafana) - Guia de uso
 
-Este documento descreve como operar e interpretar as métricas expostas pela API Django para o Prometheus.
+Este documento descreve como operar e interpretar as métricas expostas pela API Django no stack de observabilidade local com Prometheus e Grafana.
 
 ## Objetivo da fase 1
 - Expor métricas da aplicação em `GET /metrics`.
 - Coletar essas métricas via Prometheus.
 - Validar saúde, volume, erro e latência da API.
 
+## Objetivo da fase 2
+- Visualizar as métricas em dashboards legíveis no Grafana.
+- Reduzir dependência de consultas manuais no Prometheus.
+
 ## Arquivos da implementação
 - `web/settings.py`: instrumentação do Django (`django_prometheus` app e middlewares).
 - `web/urls.py`: endpoint de métricas (`/metrics`).
-- `docker-compose.prometheus.yml`: serviço local do Prometheus.
+- `docker-compose.observability.yml`: stack local com Prometheus + Grafana.
 - `monitoring/prometheus/prometheus.yml`: configuração de scrape.
+- `monitoring/grafana/provisioning/datasources/prometheus.yml`: datasource provisionado.
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml`: provider de dashboards.
+- `monitoring/grafana/dashboards/most-rpa-api-overview.json`: dashboard inicial.
 
-## Subida local (resumo)
+## Subida local (Prometheus + Grafana)
 1. Subir API:
 ```bash
 python manage.py runserver 0.0.0.0:8000
 ```
-2. Subir Prometheus:
+2. Subir stack de observabilidade:
 ```bash
-docker compose -f docker-compose.prometheus.yml up -d
+docker compose -f docker-compose.observability.yml up -d
 ```
-3. Abrir UI:
-- `http://127.0.0.1:9090`
-- Menu `Status > Targets` (job `most-rpa-api` deve estar `UP`)
+3. Abrir UIs:
+- Prometheus: `http://127.0.0.1:9090`
+- Grafana: `http://127.0.0.1:3000`
+4. Login padrão Grafana (local):
+- usuário: `admin`
+- senha: `admin`
+5. Dashboard provisionado:
+- pasta: `Most RPA`
+- dashboard: `Most RPA - API Overview`
 
 ## Catálogo de métricas (atual)
 
@@ -197,6 +210,7 @@ curl -s http://127.0.0.1:8000/metrics | grep '^django_' | head -n 100
 - janela de tempo (ex.: últimos 15m)
 - nome exato da métrica
 - `up=1` não significa app saudável no negócio, apenas que o scrape funcionou.
+- Métricas com sufixo `_created` são timestamps de criação (epoch), não indicadores de volume/latência.
 
 ## Segurança da rota `/metrics`
 - Em ambiente local, rota aberta para facilitar operação.
@@ -204,5 +218,4 @@ curl -s http://127.0.0.1:8000/metrics | grep '^django_' | head -n 100
 
 
 ## Próximas fases
-- Fase 2: Grafana (dashboards operacionais).
 - Fase 3: Alertmanager + Telegram (alertas acionáveis).
