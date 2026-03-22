@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -14,6 +15,15 @@ from bot.scraper import TransparencyBot
 from bot.logging_utils import log_event
 from bot.validators import mascarar_identificador
 from .auth import issue_token, validate_token, scope_allows
+from .metrics import (
+    API_CONSULTA_REQUESTS_TOTAL,
+    API_CONSULTA_BATCH_SIZE,
+    API_CONSULTA_DURATION_SECONDS,
+    API_CONSULTA_ITEM_DURATION_SECONDS,
+    API_CONSULTA_ITEM_STATUS_TOTAL,
+    API_CONSULTA_RESULT_KIND_TOTAL,
+    classify_result_kind,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +104,13 @@ def _batch_http_status(resultados: List[Dict[str, Any]]) -> int:
     if has_error or has_invalid:
         return 207
     return 200
+
+
+def _observe_item_metrics(mode: str, status_item: str, elapsed_seconds: float) -> None:
+    status_norm = str(status_item or "unknown").lower()
+    API_CONSULTA_ITEM_DURATION_SECONDS.labels(mode=mode, status=status_norm).observe(max(0.0, elapsed_seconds))
+    API_CONSULTA_ITEM_STATUS_TOTAL.labels(mode=mode, status=status_norm).inc()
+    API_CONSULTA_RESULT_KIND_TOTAL.labels(mode=mode, kind=classify_result_kind(status_norm)).inc()
 
 
 @extend_schema(
@@ -255,12 +272,16 @@ def consulta(request: Request):
     resultados: List[Dict[str, Any]] = []
 
     if 'consultas' in payload and isinstance(payload.get('consultas'), list):
+        request_start = time.monotonic()
+        mode = "batch_consultas"
         consultas = payload.get('consultas', [])
         refine_default = _resolve_refine_flag(payload, default=False)
+        API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
         if len(consultas) == 0:
             return _json_error('Lista "consultas" vazia', 400)
         if len(consultas) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} consultas por requisição", 400)
+        API_CONSULTA_BATCH_SIZE.observe(len(consultas))
         log_event(
             logger,
             logging.INFO,
@@ -271,6 +292,7 @@ def consulta(request: Request):
         workers = min(MAX_WORKERS, len(consultas))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {executor.submit(_run_single, c, refine_default): idx for idx, c in enumerate(consultas)}
+            submit_ts_by_idx = {idx: time.monotonic() for idx in range(len(consultas))}
             resultados = [None] * len(consultas)
             for fut in as_completed(future_map):
                 idx = future_map[fut]
@@ -278,6 +300,7 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     log_event(
                         logger,
                         logging.INFO,
@@ -289,16 +312,22 @@ def consulta(request: Request):
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando consulta %s", c)
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     if 'itens' in payload and isinstance(payload.get('itens'), list):
+        request_start = time.monotonic()
+        mode = "batch_itens"
         itens = payload.get('itens', [])
+        API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
         if len(itens) == 0:
             return _json_error('Lista "itens" vazia', 400)
         if len(itens) > MAX_BATCH:
             return _json_error(f"Máximo de {MAX_BATCH} itens por requisição", 400)
+        API_CONSULTA_BATCH_SIZE.observe(len(itens))
         log_event(
             logger,
             logging.INFO,
@@ -309,14 +338,17 @@ def consulta(request: Request):
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {}
             ordered_inputs = {}
+            submit_ts_by_idx = {}
             resultados = [None] * len(itens)
             for idx, item in enumerate(itens):
                 c = item.get('consulta') or item.get('alvo')
                 refinar_busca = _resolve_refine_flag(item, default=False)
                 if not c:
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=0.0)
                     resultados[idx] = {"consulta": None, "status": "error", "error": 'Campo "consulta" ausente no item'}
                     continue
                 ordered_inputs[idx] = (c, refinar_busca)
+                submit_ts_by_idx[idx] = time.monotonic()
                 future_map[executor.submit(_run_single, c, refinar_busca)] = idx
 
             for fut in as_completed(future_map):
@@ -325,6 +357,7 @@ def consulta(request: Request):
                 try:
                     res = fut.result()
                     status_item = _status_from_result(res)
+                    _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     log_event(
                         logger,
                         logging.INFO,
@@ -336,11 +369,17 @@ def consulta(request: Request):
                     resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
                 except Exception as e:
                     logger.exception("Erro processando item %s", c)
+                    _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - submit_ts_by_idx[idx])
                     resultados[idx] = {"consulta": c, "status": "error", "error": str(e)}
 
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse({"resultados": resultados}, safe=False, status=_batch_http_status(resultados))
 
     # Single
+    request_start = time.monotonic()
+    mode = "single"
+    API_CONSULTA_REQUESTS_TOTAL.labels(mode=mode).inc()
+
     consulta_param = payload.get('consulta') or payload.get('alvo')
     refine_param = _resolve_refine_flag(payload, default=False)
 
@@ -355,18 +394,24 @@ def consulta(request: Request):
         refinar_busca=refine_param,
     )
     try:
+        item_start = time.monotonic()
         resultado = _run_single(consulta_param, refine_param)
+        status_item = _status_from_result(resultado)
+        _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - item_start)
         log_event(
             logger,
             logging.INFO,
             "api_consulta_processada",
             consulta=mascarar_identificador(str(consulta_param)),
-            status=_status_from_result(resultado),
+            status=status_item,
             id_consulta=resultado.get("id_consulta", "-"),
         )
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse(resultado, safe=False, status=_single_http_status_from_result(resultado))
     except Exception as e:
         logger.exception("Erro processando consulta unica %s", consulta_param)
+        _observe_item_metrics(mode=mode, status_item="error", elapsed_seconds=time.monotonic() - request_start)
+        API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse({"status": "error", "error": str(e)}, status=500)
 
 

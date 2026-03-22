@@ -69,6 +69,44 @@ docker compose -f docker-compose.prometheus.yml up -d
 - `django_http_request_duration_seconds_count`
 - Uso: percentis e tempo médio de resposta.
 
+### 7) Banco de dados
+- Nesta aplicação, não há banco de dados operacional para o fluxo principal.
+- O `django_db_*` não é foco da observabilidade atual.
+
+## Métricas de negócio (custom do projeto)
+
+### 1) Quantidade de requisições no endpoint de consulta
+- Métrica: `most_api_consulta_requests_total{mode="single|batch_consultas|batch_itens"}`
+- Tipo: counter
+- Uso: volume de chamadas por tipo de payload.
+
+### 2) Quantidade de consultas por requisição (batch)
+- Métrica: `most_api_consulta_batch_size`
+- Tipo: histogram
+- Uso: distribuição do tamanho dos lotes (1, 2, 3).
+
+### 3) Tempo total para entrega da resposta (request completo)
+- Métrica: `most_api_consulta_duration_seconds{mode="..."}`
+- Tipo: histogram
+- Uso: medir SLA/SLO da API.
+
+### 4) Velocidade por consulta individual
+- Métrica: `most_api_consulta_item_duration_seconds{mode="...",status="ok|not_found|invalid|error"}`
+- Tipo: histogram
+- Uso: tempo de cada consulta (single e itens de batch).
+
+### 5) Taxa de sucesso por tipo de resultado
+- Métrica: `most_api_consulta_result_kind_total{mode="...",kind="info|problem"}`
+- Tipo: counter
+- Regra:
+- `kind="info"`: consulta com `status="ok"` (retornou informação útil).
+- `kind="problem"`: `not_found`, `invalid` ou `error`.
+
+### 6) Taxa por status funcional da consulta
+- Métrica: `most_api_consulta_item_status_total{mode="...",status="ok|not_found|invalid|error"}`
+- Tipo: counter
+- Uso: visão direta de qualidade do processamento.
+
 ## Queries PromQL prontas (para operação)
 
 ### Saúde do alvo
@@ -101,6 +139,46 @@ histogram_quantile(0.95, sum(rate(django_http_request_duration_seconds_bucket[5m
 sum(rate(django_http_request_duration_seconds_sum[5m])) / sum(rate(django_http_request_duration_seconds_count[5m]))
 ```
 
+### CPU do processo
+```promql
+rate(process_cpu_seconds_total[5m])
+```
+
+### RAM do processo (MB)
+```promql
+process_resident_memory_bytes / 1024 / 1024
+```
+
+### Requisições por tipo de payload (`single`, `batch`)
+```promql
+sum by (mode) (rate(most_api_consulta_requests_total[5m]))
+```
+
+### Distribuição de tamanho de lote (batch)
+```promql
+histogram_quantile(0.95, sum(rate(most_api_consulta_batch_size_bucket[5m])) by (le))
+```
+
+### Tempo total da API (p95)
+```promql
+histogram_quantile(0.95, sum(rate(most_api_consulta_duration_seconds_bucket[5m])) by (le, mode))
+```
+
+### Tempo por consulta individual (p95)
+```promql
+histogram_quantile(0.95, sum(rate(most_api_consulta_item_duration_seconds_bucket[5m])) by (le, mode, status))
+```
+
+### Taxa de sucesso (`info`) vs problema (`problem`)
+```promql
+sum by (kind) (rate(most_api_consulta_result_kind_total[5m]))
+```
+
+### Taxa por status funcional (`ok`, `not_found`, `invalid`, `error`)
+```promql
+sum by (status) (rate(most_api_consulta_item_status_total[5m]))
+```
+
 ## Descoberta de métricas disponíveis
 Para listar os nomes reais de métricas no ambiente atual:
 ```bash
@@ -119,6 +197,10 @@ curl -s http://127.0.0.1:8000/metrics | grep '^django_' | head -n 100
 - janela de tempo (ex.: últimos 15m)
 - nome exato da métrica
 - `up=1` não significa app saudável no negócio, apenas que o scrape funcionou.
+
+## Segurança da rota `/metrics`
+- Em ambiente local, rota aberta para facilitar operação.
+- Em produção, proteger por rede (ingress interno, allowlist, VPC/firewall), sem exposição pública.
 
 
 ## Próximas fases
