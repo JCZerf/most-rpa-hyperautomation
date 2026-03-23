@@ -1,5 +1,6 @@
 import json
 import os
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,15 @@ def _required_env(name: str) -> str:
     if not value:
         pytest.skip(f"Variável de ambiente obrigatória ausente: {name}")
     return value
+
+
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, value)
 
 
 def _post_json(url: str, payload: dict, token: str | None = None):
@@ -48,6 +58,10 @@ def _require_success_enabled() -> bool:
     return os.getenv("E2E_REQUIRE_SUCCESS", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _limits_scenarios_enabled() -> bool:
+    return os.getenv("E2E_ENABLE_LIMITS_SCENARIOS", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _issue_access_token(base_url: str, client_id: str, client_secret: str):
     return _post_json(
         f"{base_url}/api/token/",
@@ -58,6 +72,16 @@ def _issue_access_token(base_url: str, client_id: str, client_secret: str):
             "scope": "bot:read",
         },
     )
+
+
+def _assert_batch_limits_meta(body: dict, expected_total: int):
+    meta = body.get("meta_execucao")
+    assert isinstance(meta, dict), f"Resposta de lote sem meta_execucao: {body}"
+    assert int(meta.get("total_consultas", -1)) == expected_total
+    max_por_browser = int(meta.get("max_consultas_por_browser", 0))
+    assert max_por_browser >= 1
+    expected_blocos = math.ceil(expected_total / max_por_browser)
+    assert int(meta.get("blocos_fila", -1)) == expected_blocos
 
 
 def _assert_consulta_contract(status_code: int, body: dict):
@@ -186,3 +210,93 @@ def test_e2e_smoke_consulta_simples_e_refinada():
         assert status_true == 200, f"Consulta concorrente (refinar_busca=true) retornou {status_true}: {body_true}"
         assert body_false.get("status") != "invalid", f"Consulta base inválida: {body_false}"
         assert body_true.get("status") != "invalid", f"Consulta refinada inválida: {body_true}"
+
+
+@pytest.mark.e2e
+def test_e2e_smoke_lote_reage_a_limites_da_api():
+    if not _limits_scenarios_enabled():
+        pytest.skip("Cenário de limites desabilitado (E2E_ENABLE_LIMITS_SCENARIOS=false)")
+
+    base_url = _required_env("E2E_BASE_URL").rstrip("/")
+    client_id = _required_env("E2E_CLIENT_ID")
+    client_secret = _required_env("E2E_CLIENT_SECRET")
+    consulta_base = _required_env("E2E_CONSULTA_BASE")
+
+    lote_tamanho = _env_int("E2E_BATCH_SIZE", 6)
+    refinar = os.getenv("E2E_BATCH_REFINAR", "false").strip().lower() in ("1", "true", "yes", "on")
+
+    token_status, token_body = _issue_access_token(base_url, client_id, client_secret)
+    assert token_status == 200
+    assert "access_token" in token_body
+
+    payload = {"consultas": [consulta_base for _ in range(lote_tamanho)], "refinar_busca": refinar}
+    status_code, body = _post_json(f"{base_url}/api/consulta/", payload, token_body["access_token"])
+
+    _save_artifact(
+        "05_lote_limites",
+        {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "payload": payload,
+            "status_code": status_code,
+            "body": body,
+        },
+    )
+
+    _assert_consulta_contract(status_code, body)
+    if status_code in (200, 207, 502):
+        _assert_batch_limits_meta(body, expected_total=lote_tamanho)
+
+
+@pytest.mark.e2e
+def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
+    if not _limits_scenarios_enabled():
+        pytest.skip("Cenário de limites desabilitado (E2E_ENABLE_LIMITS_SCENARIOS=false)")
+
+    base_url = _required_env("E2E_BASE_URL").rstrip("/")
+    client_id = _required_env("E2E_CLIENT_ID")
+    client_secret = _required_env("E2E_CLIENT_SECRET")
+    consulta_base = _required_env("E2E_CONSULTA_BASE")
+
+    reqs_paralelas = _env_int("E2E_PARALLEL_REQUESTS", 3)
+    lote_por_requisicao = _env_int("E2E_PARALLEL_BATCH_SIZE", 4)
+
+    tokens: list[str] = []
+    for _ in range(reqs_paralelas):
+        token_status, token_body = _issue_access_token(base_url, client_id, client_secret)
+        assert token_status == 200
+        assert "access_token" in token_body
+        tokens.append(token_body["access_token"])
+
+    payload = {"consultas": [consulta_base for _ in range(lote_por_requisicao)], "refinar_busca": False}
+    started_at = datetime.now(timezone.utc)
+
+    def _executar(token: str):
+        return _post_json(f"{base_url}/api/consulta/", payload, token)
+
+    with ThreadPoolExecutor(max_workers=reqs_paralelas) as executor:
+        resultados = list(executor.map(_executar, tokens))
+
+    ended_at = datetime.now(timezone.utc)
+
+    respostas = []
+    for idx, (status_code, body) in enumerate(resultados, start=1):
+        _assert_consulta_contract(status_code, body)
+        if status_code in (200, 207, 502):
+            _assert_batch_limits_meta(body, expected_total=lote_por_requisicao)
+        respostas.append({"indice": idx, "status_code": status_code, "body": body})
+
+    _save_artifact(
+        "06_requisicoes_simultaneas_lote",
+        {
+            "timestamp_utc_inicio": started_at.isoformat(),
+            "timestamp_utc_fim": ended_at.isoformat(),
+            "duracao_ms_total": int((ended_at - started_at).total_seconds() * 1000),
+            "requisicoes_paralelas": reqs_paralelas,
+            "lote_por_requisicao": lote_por_requisicao,
+            "payload": payload,
+            "respostas": respostas,
+        },
+    )
+
+    if _require_success_enabled():
+        assert all(s == 200 for s, _ in resultados), f"Nem todas as requisições simultâneas retornaram 200: {respostas}"

@@ -262,6 +262,8 @@ Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-
 
 ## Testes
 
+- Matriz consolidada (tipo de teste x cobertura): [doc/08-matriz-de-testes.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/08-matriz-de-testes.md)
+
 ### Testes locais rápidos (sem ambiente externo)
 ```bash
 pytest -q -m "not e2e"
@@ -287,6 +289,14 @@ Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pyte
 ### Teste E2E smoke (ambiente real)
 - Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
 - Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), cada uma com seu próprio token de uso único, reduzindo risco de regressão por intermitência de UI externa.
+- Cenários adicionais opcionais no mesmo arquivo:
+  - lote reagindo a limites (`meta_execucao.max_consultas_por_browser` e `blocos_fila`);
+  - múltiplas requisições simultâneas com lote.
+- Para ativar os cenários adicionais:
+  - `E2E_ENABLE_LIMITS_SCENARIOS=true`
+  - `E2E_BATCH_SIZE` (default `6`)
+  - `E2E_PARALLEL_REQUESTS` (default `3`)
+  - `E2E_PARALLEL_BATCH_SIZE` (default `4`)
 - Variáveis necessárias:
   - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
   - `E2E_CLIENT_ID`
