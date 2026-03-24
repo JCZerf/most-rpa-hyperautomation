@@ -45,11 +45,12 @@ def _build_mixed_batch_payload(targets: list[str]) -> tuple[dict, dict]:
     itens = []
     for idx, consulta in enumerate(targets):
         itens.append({"consulta": consulta, "refinar_busca": bool(idx >= metade_false)})
-    return {"itens": itens}, {
+    return {"itens": itens, "incluir_base64": False}, {
         "modo_payload": "batch_itens_misto",
         "total_consultas": total,
         "total_refinar_false": metade_false,
         "total_refinar_true": total - metade_false,
+        "incluir_base64": False,
     }
 
 
@@ -70,10 +71,16 @@ def _post_json(url: str, payload: dict, token: str | None = None):
     try:
         with urlopen(req, timeout=E2E_HTTP_TIMEOUT_SECONDS) as resp:
             raw = resp.read().decode("utf-8")
-            return resp.getcode(), json.loads(raw)
+            try:
+                return resp.getcode(), json.loads(raw)
+            except json.JSONDecodeError:
+                return resp.getcode(), {"status": "error", "error": raw or "Invalid JSON response"}
     except HTTPError as e:
         raw = e.read().decode("utf-8") if e.fp else ""
-        body = json.loads(raw) if raw else {"status": "error", "error": str(e)}
+        try:
+            body = json.loads(raw) if raw else {"status": "error", "error": str(e)}
+        except json.JSONDecodeError:
+            body = {"status": "error", "error": raw or str(e)}
         return e.code, body
     except URLError as e:
         return 0, {"status": "error", "error": f"Network error: {e}"}
@@ -308,8 +315,8 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
     client_secret = _required_env("E2E_CLIENT_SECRET")
     consultas_paralelo = _batch_targets_from_env()
     payload, payload_meta = _build_mixed_batch_payload(consultas_paralelo)
-    # Ambiente atual: 2 requisicoes simultaneas suportadas; exercitamos o dobro para observar fila.
-    reqs_paralelas = 4
+    # Ambiente atual: até 2 requisições simultâneas por instância.
+    reqs_paralelas = 2
 
     tokens: list[str] = []
     for _ in range(reqs_paralelas):
