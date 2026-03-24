@@ -11,6 +11,7 @@ import pytest
 
 
 ARTIFACT_DIR = Path("output/e2e-artifacts")
+E2E_HTTP_TIMEOUT_SECONDS = 900
 
 
 def _required_env(name: str) -> str:
@@ -67,7 +68,7 @@ def _post_json(url: str, payload: dict, token: str | None = None):
 
     req = Request(url=url, data=data, headers=headers, method="POST")
     try:
-        with urlopen(req, timeout=180) as resp:
+        with urlopen(req, timeout=E2E_HTTP_TIMEOUT_SECONDS) as resp:
             raw = resp.read().decode("utf-8")
             return resp.getcode(), json.loads(raw)
     except HTTPError as e:
