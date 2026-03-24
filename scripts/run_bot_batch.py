@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bot.orchestrator import env_bool, executar_consultas_em_lote_async, get_runtime_limits
+from bot.runtime.orchestrator import env_bool, executar_consultas_em_lote_async, get_runtime_limits
 
 
 def _parse_bool(raw: str | None, default: bool) -> bool:

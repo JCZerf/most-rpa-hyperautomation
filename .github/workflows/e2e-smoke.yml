@@ -29,11 +29,12 @@ jobs:
           E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
           E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
           E2E_CONSULTA_REFINADA: ${{ secrets.E2E_CONSULTA_REFINADA }}
+          E2E_BATCH_TARGETS: ${{ vars.E2E_BATCH_TARGETS }}
         run: |
           missing=0
-          for var in E2E_BASE_URL E2E_CLIENT_ID E2E_CLIENT_SECRET E2E_CONSULTA_BASE E2E_CONSULTA_REFINADA; do
+          for var in E2E_BASE_URL E2E_CLIENT_ID E2E_CLIENT_SECRET E2E_CONSULTA_BASE E2E_CONSULTA_REFINADA E2E_BATCH_TARGETS; do
             if [ -z "${!var}" ]; then
-              echo "Missing required secret: $var"
+              echo "Missing required configuration: $var"
               missing=1
             fi
           done
@@ -48,10 +49,11 @@ jobs:
           E2E_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
           E2E_CONSULTA_BASE: ${{ secrets.E2E_CONSULTA_BASE }}
           E2E_CONSULTA_REFINADA: ${{ secrets.E2E_CONSULTA_REFINADA }}
+          E2E_BATCH_TARGETS: ${{ vars.E2E_BATCH_TARGETS }}
           E2E_REQUIRE_SUCCESS: "true"
         run: |
           mkdir -p output/e2e-artifacts
-          pytest -q tests/test_e2e_smoke.py -m e2e --junitxml=output/e2e-artifacts/junit.xml
+          pytest -q tests/e2e/test_e2e_smoke.py -m e2e --junitxml=output/e2e-artifacts/junit.xml
 
       - name: Upload E2E artifacts
         if: always()

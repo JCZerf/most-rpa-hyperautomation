@@ -20,13 +20,43 @@ def _required_env(name: str) -> str:
     return value
 
 
-def _env_int(name: str, default: int, minimum: int = 1) -> int:
-    raw = os.getenv(name, str(default)).strip()
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        value = default
-    return max(minimum, value)
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _batch_targets_from_env() -> list[str]:
+    raw = os.getenv("E2E_BATCH_TARGETS", "").strip()
+    if not raw:
+        pytest.skip("Variável obrigatória ausente para batch: E2E_BATCH_TARGETS")
+
+    targets = [item.strip() for item in raw.split(";") if item.strip()]
+    if len(targets) < 2:
+        pytest.skip("Batch exige pelo menos 2 alvos em E2E_BATCH_TARGETS")
+    return targets
+
+
+def _build_mixed_batch_payload(targets: list[str]) -> tuple[dict, dict]:
+    total = len(targets)
+    metade_false = total // 2
+    itens = []
+    for idx, consulta in enumerate(targets):
+        itens.append({"consulta": consulta, "refinar_busca": bool(idx >= metade_false)})
+    return {"itens": itens}, {
+        "modo_payload": "batch_itens_misto",
+        "total_consultas": total,
+        "total_refinar_false": metade_false,
+        "total_refinar_true": total - metade_false,
+    }
+
+
+def _build_mixed_batch_payload_with_size(targets_pool: list[str], total: int) -> tuple[dict, dict]:
+    if total < 1:
+        pytest.fail("Tamanho de lote inválido")
+    selected = [targets_pool[idx % len(targets_pool)] for idx in range(total)]
+    return _build_mixed_batch_payload(selected)
 
 
 def _post_json(url: str, payload: dict, token: str | None = None):
@@ -55,11 +85,7 @@ def _save_artifact(name: str, payload: dict):
 
 
 def _require_success_enabled() -> bool:
-    return os.getenv("E2E_REQUIRE_SUCCESS", "false").strip().lower() in ("1", "true", "yes", "on")
-
-
-def _limits_scenarios_enabled() -> bool:
-    return os.getenv("E2E_ENABLE_LIMITS_SCENARIOS", "false").strip().lower() in ("1", "true", "yes", "on")
+    return _env_bool("E2E_REQUIRE_SUCCESS", False)
 
 
 def _issue_access_token(base_url: str, client_id: str, client_secret: str):
@@ -214,28 +240,24 @@ def test_e2e_smoke_consulta_simples_e_refinada():
 
 @pytest.mark.e2e
 def test_e2e_smoke_lote_reage_a_limites_da_api():
-    if not _limits_scenarios_enabled():
-        pytest.skip("Cenário de limites desabilitado (E2E_ENABLE_LIMITS_SCENARIOS=false)")
-
     base_url = _required_env("E2E_BASE_URL").rstrip("/")
     client_id = _required_env("E2E_CLIENT_ID")
     client_secret = _required_env("E2E_CLIENT_SECRET")
-    consulta_base = _required_env("E2E_CONSULTA_BASE")
-
-    lote_tamanho = _env_int("E2E_BATCH_SIZE", 6)
-    refinar = os.getenv("E2E_BATCH_REFINAR", "false").strip().lower() in ("1", "true", "yes", "on")
+    consultas_lote = _batch_targets_from_env()
+    payload, payload_meta = _build_mixed_batch_payload(consultas_lote)
 
     token_status, token_body = _issue_access_token(base_url, client_id, client_secret)
     assert token_status == 200
     assert "access_token" in token_body
 
-    payload = {"consultas": [consulta_base for _ in range(lote_tamanho)], "refinar_busca": refinar}
     status_code, body = _post_json(f"{base_url}/api/consulta/", payload, token_body["access_token"])
 
     _save_artifact(
         "05_lote_limites",
         {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "consultas_configuradas": consultas_lote,
+            "payload_meta": payload_meta,
             "payload": payload,
             "status_code": status_code,
             "body": body,
@@ -244,21 +266,49 @@ def test_e2e_smoke_lote_reage_a_limites_da_api():
 
     _assert_consulta_contract(status_code, body)
     if status_code in (200, 207, 502):
-        _assert_batch_limits_meta(body, expected_total=lote_tamanho)
+        _assert_batch_limits_meta(body, expected_total=len(consultas_lote))
+
+
+@pytest.mark.e2e
+def test_e2e_smoke_lote_unico_12_alvos():
+    base_url = _required_env("E2E_BASE_URL").rstrip("/")
+    client_id = _required_env("E2E_CLIENT_ID")
+    client_secret = _required_env("E2E_CLIENT_SECRET")
+    consultas_lote = _batch_targets_from_env()
+    payload, payload_meta = _build_mixed_batch_payload_with_size(consultas_lote, total=12)
+
+    token_status, token_body = _issue_access_token(base_url, client_id, client_secret)
+    assert token_status == 200
+    assert "access_token" in token_body
+
+    status_code, body = _post_json(f"{base_url}/api/consulta/", payload, token_body["access_token"])
+
+    _save_artifact(
+        "07_lote_12_alvos",
+        {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "consultas_configuradas": consultas_lote,
+            "payload_meta": payload_meta,
+            "payload": payload,
+            "status_code": status_code,
+            "body": body,
+        },
+    )
+
+    _assert_consulta_contract(status_code, body)
+    if status_code in (200, 207, 502):
+        _assert_batch_limits_meta(body, expected_total=12)
 
 
 @pytest.mark.e2e
 def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
-    if not _limits_scenarios_enabled():
-        pytest.skip("Cenário de limites desabilitado (E2E_ENABLE_LIMITS_SCENARIOS=false)")
-
     base_url = _required_env("E2E_BASE_URL").rstrip("/")
     client_id = _required_env("E2E_CLIENT_ID")
     client_secret = _required_env("E2E_CLIENT_SECRET")
-    consulta_base = _required_env("E2E_CONSULTA_BASE")
-
-    reqs_paralelas = _env_int("E2E_PARALLEL_REQUESTS", 3)
-    lote_por_requisicao = _env_int("E2E_PARALLEL_BATCH_SIZE", 4)
+    consultas_paralelo = _batch_targets_from_env()
+    payload, payload_meta = _build_mixed_batch_payload(consultas_paralelo)
+    # Ambiente atual: 2 requisicoes simultaneas suportadas; exercitamos o dobro para observar fila.
+    reqs_paralelas = 4
 
     tokens: list[str] = []
     for _ in range(reqs_paralelas):
@@ -266,8 +316,6 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
         assert token_status == 200
         assert "access_token" in token_body
         tokens.append(token_body["access_token"])
-
-    payload = {"consultas": [consulta_base for _ in range(lote_por_requisicao)], "refinar_busca": False}
     started_at = datetime.now(timezone.utc)
 
     def _executar(token: str):
@@ -282,7 +330,7 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
     for idx, (status_code, body) in enumerate(resultados, start=1):
         _assert_consulta_contract(status_code, body)
         if status_code in (200, 207, 502):
-            _assert_batch_limits_meta(body, expected_total=lote_por_requisicao)
+            _assert_batch_limits_meta(body, expected_total=len(consultas_paralelo))
         respostas.append({"indice": idx, "status_code": status_code, "body": body})
 
     _save_artifact(
@@ -292,7 +340,9 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
             "timestamp_utc_fim": ended_at.isoformat(),
             "duracao_ms_total": int((ended_at - started_at).total_seconds() * 1000),
             "requisicoes_paralelas": reqs_paralelas,
-            "lote_por_requisicao": lote_por_requisicao,
+            "lote_por_requisicao": len(consultas_paralelo),
+            "consultas_configuradas": consultas_paralelo,
+            "payload_meta": payload_meta,
             "payload": payload,
             "respostas": respostas,
         },

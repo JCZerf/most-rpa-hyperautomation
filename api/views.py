@@ -11,14 +11,14 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiExample, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
-from bot.logging_utils import log_event
-from bot.orchestrator import (
+from bot.core.logging_utils import log_event
+from bot.runtime.orchestrator import (
     env_bool,
     executar_consultas_em_lote_async,
     get_runtime_limits,
     remover_imagens_base64,
 )
-from bot.validators import mascarar_identificador
+from bot.core.validators import mascarar_identificador
 from .auth import consume_token_once, issue_token, validate_token, scope_allows
 from .metrics import (
     API_CONSULTA_REQUESTS_TOTAL,
@@ -102,7 +102,7 @@ def _resolve_include_base64_flag(payload: Dict[str, Any], default: bool = DEFAUL
 
 
 def _run_single(consulta_param: str, refine_param: bool, incluir_base64: bool) -> Dict[str, Any]:
-    from bot.scraper import TransparencyBotAsync
+    from bot.engine.scraper import TransparencyBotAsync
 
     bot = TransparencyBotAsync(headless=True, alvo=str(consulta_param), usar_refine=bool(refine_param))
     resultado = async_to_sync(bot.run_async)()

@@ -1,6 +1,6 @@
 import pytest
 
-from bot.validators import classificar_consulta
+from bot.core.validators import classificar_consulta
 
 
 @pytest.mark.parametrize(

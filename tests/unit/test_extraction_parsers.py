@@ -1,6 +1,6 @@
 import asyncio
 
-from bot.extraction import (
+from bot.engine.extraction import (
     _detectar_verificacao_humana,
     _parse_linha_disponibilizado,
     _parse_linha_generica,

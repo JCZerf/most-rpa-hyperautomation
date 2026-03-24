@@ -5,8 +5,8 @@ import unicodedata
 from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
-from .logging_utils import log_event
-from .utils import formatar_brl, valor_texto_para_float
+from bot.core.logging_utils import log_event
+from bot.core.utils import formatar_brl, valor_texto_para_float
 
 logger = logging.getLogger(__name__)
 

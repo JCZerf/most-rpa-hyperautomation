@@ -4,7 +4,7 @@ import os
 import time
 from typing import Any, Dict, Iterable, List, Tuple
 
-from .identity import get_random_profile
+from bot.core.identity import get_random_profile
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ async def _executar_consulta_em_aba(
     headless: bool,
     incluir_base64: bool,
 ) -> Dict[str, Any]:
-    from .scraper import TransparencyBotAsync
+    from bot.engine.scraper import TransparencyBotAsync
 
     page = await context.new_page()
     started = time.perf_counter()
@@ -129,7 +129,7 @@ async def _executar_bloco_no_browser(
     headless: bool,
     incluir_base64: bool,
 ) -> List[Dict[str, Any]]:
-    from .browser import create_browser_context_async
+    from bot.engine.browser import create_browser_context_async
 
     perfil = get_random_profile()
     browser, context, page_inicial = await create_browser_context_async(

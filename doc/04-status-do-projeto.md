@@ -19,7 +19,7 @@
 - Validação de entradas (CPF/NIS/nome) e rejeição antes do navegador: **feito**.
 - Mensagens de retorno dos cenários de teste (MOST): **feito** para os cenários principais (incluindo `status="not_found"` em CPF/NIS inexistente e nome sem resultado).
 - Segurança/LGPD: **feito** com mascaramento de identificadores nos logs, autenticação por token e uso de segredos via variáveis de ambiente.
-- E2E smoke em ambiente real (API online): **feito** (`tests/test_e2e_smoke.py` + workflow `.github/workflows/e2e-smoke.yml` com artefatos, emissão de token dedicada por chamada concorrente).
+- E2E smoke em ambiente real (API online): **feito** (`tests/e2e/test_e2e_smoke.py` + workflow `.github/workflows/e2e-smoke.yml` com artefatos, emissão de token dedicada por chamada concorrente).
 
 ## Linha do tempo (execução)
 - **Fase 1 — Fundação do bot (11/03 a 12/03/2026, concluída):** criação da base Playwright, modularização inicial (`navigation`/`extraction`) e estruturação da documentação técnica.

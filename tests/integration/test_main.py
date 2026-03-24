@@ -1,6 +1,6 @@
 import types
 
-import bot.main as main
+import bot.runtime.main as main
 
 
 def test_remover_imagens_base64_remove_chaves_de_evidencia():

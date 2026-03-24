@@ -1,6 +1,6 @@
 import asyncio
 
-from bot.scraper import TransparencyBotAsync
+from bot.engine.scraper import TransparencyBotAsync
 
 
 class DummyContext:
@@ -25,7 +25,7 @@ def test_bot_zero_result(monkeypatch):
             "mensagem": "Não foi possível retornar os dados no tempo de resposta solicitado",
         }
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
     bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
     result = _run_bot_with_mocks(bot)
 
@@ -62,9 +62,9 @@ def test_bot_sem_beneficio(monkeypatch):
             "hora_consulta": "12:00",
         }
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
-    monkeypatch.setattr("bot.scraper.extract_personal_info_async", fake_pessoal)
-    monkeypatch.setattr("bot.scraper.extract_benefits_async", fake_benefits)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.extract_personal_info_async", fake_pessoal)
+    monkeypatch.setattr("bot.engine.scraper.extract_benefits_async", fake_benefits)
     monkeypatch.setattr(TransparencyBotAsync, "_preparar_detalhes_beneficio", fake_preparar)
 
     bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
@@ -102,9 +102,9 @@ def test_bot_com_beneficio(monkeypatch):
             "hora_consulta": "12:00",
         }
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
-    monkeypatch.setattr("bot.scraper.extract_personal_info_async", fake_pessoal)
-    monkeypatch.setattr("bot.scraper.extract_benefits_async", fake_benefits)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.extract_personal_info_async", fake_pessoal)
+    monkeypatch.setattr("bot.engine.scraper.extract_benefits_async", fake_benefits)
     monkeypatch.setattr(TransparencyBotAsync, "_preparar_detalhes_beneficio", fake_preparar)
 
     bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
@@ -132,7 +132,7 @@ def test_bot_nome_inexistente(monkeypatch):
             "mensagem": "Foram encontrados 0 resultados para o termo NOME INEXISTENTE",
         }
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
     bot = TransparencyBotAsync(headless=True, alvo="NOME INEXISTENTE")
     result = _run_bot_with_mocks(bot)
 
@@ -168,9 +168,9 @@ def test_bot_detalhe_parcelas(monkeypatch):
             "hora_consulta": "12:00",
         }
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
-    monkeypatch.setattr("bot.scraper.extract_personal_info_async", fake_pessoal)
-    monkeypatch.setattr("bot.scraper.extract_benefits_async", fake_benefits)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.extract_personal_info_async", fake_pessoal)
+    monkeypatch.setattr("bot.engine.scraper.extract_benefits_async", fake_benefits)
     monkeypatch.setattr(TransparencyBotAsync, "_preparar_detalhes_beneficio", fake_preparar)
 
     bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
@@ -184,7 +184,7 @@ def test_bot_reporta_etapa_falha_no_meta(monkeypatch):
     async def fake_search(page, url_base, alvo, usar_refine):
         raise RuntimeError("[ETAPA:clicar_lupa_busca] Timeout ao clicar na lupa")
 
-    monkeypatch.setattr("bot.scraper.perform_search_async", fake_search)
+    monkeypatch.setattr("bot.engine.scraper.perform_search_async", fake_search)
 
     bot = TransparencyBotAsync(headless=True, alvo="FULANO TESTE")
     result = _run_bot_with_mocks(bot)

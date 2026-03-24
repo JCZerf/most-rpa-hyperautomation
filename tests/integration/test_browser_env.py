@@ -1,7 +1,7 @@
 import asyncio
 
-from bot.browser import create_browser_context_async
-from bot.scraper import TransparencyBotAsync
+from bot.engine.browser import create_browser_context_async
+from bot.engine.scraper import TransparencyBotAsync
 
 
 class FakePage:
@@ -188,10 +188,10 @@ def test_scraper_usa_user_agent_do_perfil(monkeypatch):
             "meta": {"id_consulta": id_consulta, "data_hora_consulta": data_hora_consulta, "resultados_encontrados": 0},
         }
 
-    monkeypatch.setattr("bot.scraper.async_playwright", lambda: DummyAsyncPW())
-    monkeypatch.setattr("bot.scraper.create_browser_context_async", fake_create_browser_context_async)
+    monkeypatch.setattr("bot.engine.scraper.async_playwright", lambda: DummyAsyncPW())
+    monkeypatch.setattr("bot.engine.scraper.create_browser_context_async", fake_create_browser_context_async)
     monkeypatch.setattr(
-        "bot.scraper.get_random_profile",
+        "bot.engine.scraper.get_random_profile",
         lambda: {
             "name": "perfil-teste",
             "user_agent": "UA-via-profile",

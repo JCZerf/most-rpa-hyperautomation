@@ -238,7 +238,6 @@ curl -s http://127.0.0.1:8000/metrics | grep '^django_' | head -n 100
 
 ## Segurança da rota `/metrics`
 - Em ambiente local, rota aberta para facilitar operação.
-- Em produção, proteger por rede (ingress interno, allowlist, VPC/firewall), sem exposição pública.
 
 
 ## Fase 3 - fluxo separado de alertas

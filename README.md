@@ -4,7 +4,7 @@ Automação RPA/hiperautomação em Python que consulta o Portal da Transparênc
 
 Principais modos de uso:
 - **API Django/DRF**: endpoint REST que executa o bot (batch ou single) e entrega JSON.
-- **Runner local async**: script `bot/main.py` para execuções unitárias ou em lote, gravando resultados em `output/`.
+- **Runner local async**: script `bot/runtime/main.py` para execuções unitárias ou em lote, gravando resultados em `output/`.
 - **Hiperautomação (Make + Frontend externo)**: fluxo de orquestração externo para disparar a automação via webhook, acionar a API do bot e integrar com Google Drive/Sheets.
 
 ## Links rapidos (homologacao)
@@ -18,9 +18,9 @@ Make (cenario): https://us2.make.com/2007415/scenarios/4402917/edit
 - Playwright (Python) para navegação e scraping.
 - Django + Django REST Framework + drf-spectacular para API REST e documentação OpenAPI/Swagger (`/api/docs/`).
 - Autenticação OAuth2 `client_credentials` + JWT HS256 de uso único por consulta (`api/auth.py`).
-- Bot assíncrono em `bot/scraper.py`, com navegação em `bot/navigation.py`, extração em `bot/extraction.py` e validação em `bot/validators.py`.
-- Orquestração de concorrência/fila em `bot/orchestrator.py` (browser fixo em `1` e paralelismo por abas).
-- Runner local em `bot/main.py` e runner de stress em `scripts/run_bot_batch.py`.
+- Bot assíncrono em `bot/engine/scraper.py`, com navegação em `bot/engine/navigation.py`, extração em `bot/engine/extraction.py` e validação em `bot/core/validators.py`.
+- Orquestração de concorrência/fila em `bot/runtime/orchestrator.py` (browser fixo em `1` e paralelismo por abas).
+- Runner local em `bot/runtime/main.py` e runner de stress em `scripts/run_bot_batch.py`.
 - Observabilidade com `django-prometheus`, Prometheus e Grafana (alertas Telegram validados em ambiente local).
 - GitHub Actions para CI (testes/smoke/E2E) e CD controlado no Cloud Run.
 
@@ -35,12 +35,18 @@ Itens versionados no repositório:
 ```text
 most-rpa-hyperautomation/
 ├── api/                      # Endpoints REST, autenticação e rotas da API
-├── bot/                      # Núcleo do robô (navegação, extração, browser, validações)
+├── bot/
+│   ├── core/                 # Utilitários, validações, identidade e logging compartilhado
+│   ├── engine/               # Navegação, browser, extração e scraper Playwright
+│   └── runtime/              # Runner local e orquestração assíncrona
 ├── doc/                      # Documentação do desafio (contexto, requisitos, escolhas, status)
 ├── img/                      # Evidências visuais (integrações, observabilidade e demo)
 ├── monitoring/               # Configurações de observabilidade (Prometheus/Grafana)
 ├── scripts/                  # Scripts auxiliares (stress monitor e batch runner)
-├── tests/                    # Testes unitários/API (com mocks para o navegador)
+├── tests/
+│   ├── unit/                 # Testes unitários
+│   ├── integration/          # Testes de integração local (API/app com mocks/fakes)
+│   └── e2e/                  # Testes E2E (ambiente real)
 ├── web/                      # Configuração Django (settings, urls, wsgi)
 ├── .github/workflows/        # CI/CD e deploy no Cloud Run
 ├── Dockerfile                # Build da imagem com dependências do Playwright
@@ -208,9 +214,9 @@ Respostas seguem o JSON do bot (pessoa, benefícios, meta) e sempre incluem `id_
 - Exemplos completos e contrato detalhado: [doc/07-formato-das-respostas-da-api.md](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/07-formato-das-respostas-da-api.md)
 
 ## Executar via runner local
-Use o runner async em `bot/main.py`:
+Use o runner async em `bot/runtime/main.py`:
 ```bash
-python -m bot.main --consulta "04031769644"
+python -m bot.runtime.main --consulta "04031769644"
 ```
 Cada alvo gera saída JSON no stdout (e você pode desativar base64 com `--modo-dev-sem-imagens`).
 
@@ -270,15 +276,15 @@ pytest -q -m "not e2e"
 ```
 
 Cobertura principal desse bloco:
-- `tests/test_validators.py`: validação de CPF/NIS/nome.
-- `tests/test_navigation.py`: score de nome e escolha do resultado mais próximo.
-- `tests/test_extraction_parsers.py`: parsing de layouts de tabela de detalhe (recebidos/disponibilizado/sacados/fallback).
-- `tests/test_bot.py`: contrato de saída do bot (`N/A`, `id_consulta`, `data_hora_consulta`, erros e evidências).
-- `tests/test_browser_env.py`: leitura de envs do Playwright/browser.
-- `tests/test_main.py`: runner local (`main.py`), duração e comportamento de execução.
-- `tests/test_utils.py`: conversão/formatacão monetária (`valor_texto_para_float`, `formatar_brl`).
-- `tests/test_api_token.py`: geração e validação básica de token.
-- `tests/test_api_consulta.py`: endpoint `/api/consulta` (single/lote), autenticação, limites e erros.
+- `tests/unit/test_validators.py`: validação de CPF/NIS/nome.
+- `tests/unit/test_navigation.py`: score de nome e escolha do resultado mais próximo.
+- `tests/unit/test_extraction_parsers.py`: parsing de layouts de tabela de detalhe (recebidos/disponibilizado/sacados/fallback).
+- `tests/integration/test_bot.py`: contrato de saída do bot (`N/A`, `id_consulta`, `data_hora_consulta`, erros e evidências).
+- `tests/integration/test_browser_env.py`: leitura de envs do Playwright/browser.
+- `tests/integration/test_main.py`: runner local (`main.py`), duração e comportamento de execução.
+- `tests/unit/test_utils.py`: conversão/formatacão monetária (`valor_texto_para_float`, `formatar_brl`).
+- `tests/integration/test_api_token.py`: geração e validação básica de token.
+- `tests/integration/test_api_consulta.py`: endpoint `/api/consulta` (single/lote), autenticação, limites e erros.
 
 ### Rodar toda a suíte (inclui E2E se configurado)
 ```bash
@@ -287,23 +293,25 @@ pytest
 Observação: sem as variáveis de ambiente do E2E, rode preferencialmente `pytest -q -m "not e2e"`.
 
 ### Teste E2E smoke (ambiente real)
-- Arquivo: `tests/test_e2e_smoke.py` (marcador `e2e`).
+- Arquivo: `tests/e2e/test_e2e_smoke.py` (marcador `e2e`).
 - Objetivo: validar contrato da API online com chamadas reais concorrentes (`refinar_busca=false` e `refinar_busca=true`), cada uma com seu próprio token de uso único, reduzindo risco de regressão por intermitência de UI externa.
 - Cenários adicionais opcionais no mesmo arquivo:
-  - lote reagindo a limites (`meta_execucao.max_consultas_por_browser` e `blocos_fila`);
-  - múltiplas requisições simultâneas com lote.
-- Para ativar os cenários adicionais:
-  - `E2E_ENABLE_LIMITS_SCENARIOS=true`
-  - `E2E_BATCH_SIZE` (default `6`)
-  - `E2E_PARALLEL_REQUESTS` (default `3`)
-  - `E2E_PARALLEL_BATCH_SIZE` (default `4`)
+  - lote reagindo a limites (`meta_execucao.max_consultas_por_browser` e `blocos_fila`) com múltiplos alvos;
+  - lote único com 12 alvos simultâneos (mesmo pool de `E2E_BATCH_TARGETS`, com rotação quando necessário);
+  - múltiplas requisições simultâneas com lote e mistura de `refinar_busca`.
+- Observação: o cenário unitário concorrente (`refinar=false` e `refinar=true`) permanece inalterado.
 - Variáveis necessárias:
   - `E2E_BASE_URL` (ex.: `https://<seu-servico>.run.app`)
   - `E2E_CLIENT_ID`
   - `E2E_CLIENT_SECRET`
   - `E2E_CONSULTA_BASE`
   - `E2E_CONSULTA_REFINADA`
+  - `E2E_BATCH_TARGETS` (lista de alvos separada por `;` para cenários de batch)
   - `E2E_REQUIRE_SUCCESS` (opcional; quando `true`, exige sucesso funcional nas duas chamadas concorrentes)
+- Lógica dos cenários de batch:
+  - o tamanho do batch é exatamente o número de alvos em `E2E_BATCH_TARGETS`;
+  - metade do batch roda com `refinar_busca=false` e metade com `refinar_busca=true`;
+  - no cenário paralelo, a quantidade de requisições simultâneas é fixa em `4` (dobro de `2` suportadas no ambiente) para observar fila enquanto o bot processa.
 - Execução local:
 ```bash
 E2E_BASE_URL=... \
@@ -311,8 +319,9 @@ E2E_CLIENT_ID=... \
 E2E_CLIENT_SECRET=... \
 E2E_CONSULTA_BASE=... \
 E2E_CONSULTA_REFINADA=... \
+E2E_BATCH_TARGETS='A LIDA PEREIRA FIALHO;A ANNE CHRISTINE SILVA RIBEIRO;GAABI OLIVEIRA DE MESQUITA;HAABE OLIVEIRA DA SILVA' \
 E2E_REQUIRE_SUCCESS=true \
-./venv/bin/pytest -q tests/test_e2e_smoke.py -m e2e
+./venv/bin/pytest -q tests/e2e/test_e2e_smoke.py -m e2e
 ```
 - Artefatos são salvos em `output/e2e-artifacts/` (inclui `01_tokens.json`, respostas, status HTTP, durações e `junit.xml` no CI).
 
@@ -321,6 +330,8 @@ E2E_REQUIRE_SUCCESS=true \
 - Disparo: manual (`workflow_dispatch`) e agendado diário.
 - Configure os secrets do repositório:
   - `E2E_BASE_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_CONSULTA_BASE`, `E2E_CONSULTA_REFINADA`.
+- Configure a variable do repositório para batch:
+  - `E2E_BATCH_TARGETS` (alvos separados por `;`).
 
 ### Evidências (catálogo único)
 - Catálogo consolidado e atualizado de evidências: [doc/04-status-do-projeto.md (seção "Evidências registradas")](/home/jcarlos/Documents/work-projects/most-rpa-hyperautomation/doc/04-status-do-projeto.md).
@@ -338,7 +349,7 @@ E2E_REQUIRE_SUCCESS=true \
 - Se o Chromium não subir, reinstale deps do sistema e rode `playwright install`.
 - Se usar `PLAYWRIGHT_CHANNEL=chrome`, instale o Chrome no ambiente ou rode `playwright install chrome`.
 - Se usar `PLAYWRIGHT_USE_STEALTH_PACKAGE=true`, instale a dependência: `pip install playwright-stealth`.
-- Site pode mudar layout; seletores estão em `bot/navigation.py` e `bot/extraction.py`.
+- Site pode mudar layout; seletores estão em `bot/engine/navigation.py` e `bot/engine/extraction.py`.
 - O Portal da Transparência pode acionar challenge/telemetria. Atualmente o projeto não classifica automaticamente como `status="blocked"` para evitar falso positivo.
 - Logs do runner local em `logs/execucao_<timestamp>.log` e logs da API via Django/Cloud Logging.
 - Make (payload): evite array fixo com posições manuais para `consultas`; se houver posições não preenchidas, podem surgir `null` e comportamento inconsistente na consulta única.

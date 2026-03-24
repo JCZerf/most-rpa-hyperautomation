@@ -6,7 +6,7 @@ import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from .logging_utils import log_event
+from bot.core.logging_utils import log_event
 
 logger = logging.getLogger(__name__)
 STOPWORDS_NOME = {"A", "O", "AS", "OS", "DE", "DA", "DO", "DAS", "DOS", "E"}

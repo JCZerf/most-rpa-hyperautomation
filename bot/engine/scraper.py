@@ -7,13 +7,13 @@ from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
 
-from bot.identity import get_random_profile
+from bot.core.identity import get_random_profile
 
 from .browser import create_browser_context_async
 from .extraction import extract_benefits_async, extract_personal_info_async
-from .logging_utils import bind_id_consulta, log_event, reset_id_consulta
+from bot.core.logging_utils import bind_id_consulta, log_event, reset_id_consulta
 from .navigation import perform_search_async
-from .validators import classificar_consulta
+from bot.core.validators import classificar_consulta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
