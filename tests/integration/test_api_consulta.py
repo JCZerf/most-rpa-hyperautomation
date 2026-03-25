@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 
 import pytest
@@ -334,7 +336,7 @@ def test_consulta_single_error_from_bot_returns_502(client, monkeypatch):
     assert resp.json()["status"] == "error"
 
 
-def test_consulta_single_error_retries_once_and_recovers(client, monkeypatch):
+def test_consulta_single_error_retries_once_and_recovers(client, monkeypatch, caplog):
     calls = []
 
     def fake_run_single(consulta_param, refine_param, incluir_base64):
@@ -344,10 +346,35 @@ def test_consulta_single_error_retries_once_and_recovers(client, monkeypatch):
         return {"status": "ok", "pessoa": {"consulta": consulta_param}, "beneficios": [], "meta": {}}
 
     monkeypatch.setattr("api.views._run_single", fake_run_single)
+    caplog.set_level(logging.INFO, logger="api.views")
     resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
     assert resp.status_code == 200
     assert calls == ["FULANO TESTE", "FULANO TESTE"]
-    assert resp.json()["status"] == "ok"
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["meta"]["retry"] == {
+        "tentativas_execucao": 2,
+        "retry_acionado": True,
+        "recuperado_por_retry": True,
+        "status_primeira_tentativa": "error",
+        "status_final": "ok",
+    }
+
+    events = [json.loads(record.message) for record in caplog.records if record.name == "api.views"]
+    assert any(event["event"] == "api_consulta_retry_acionado" for event in events)
+    assert any(
+        event["event"] == "api_consulta_retry_finalizado"
+        and event["recuperado_por_retry"] is True
+        and event["status_final"] == "ok"
+        for event in events
+    )
+    assert any(
+        event["event"] == "api_consulta_processada"
+        and event["tentativas_execucao"] == 2
+        and event["retry_acionado"] is True
+        and event["recuperado_por_retry"] is True
+        for event in events
+    )
 
 
 def test_consulta_single_invalid_does_not_retry(client, monkeypatch):
@@ -361,7 +388,15 @@ def test_consulta_single_invalid_does_not_retry(client, monkeypatch):
     resp = client.post("/api/consulta/", data={"consulta": "123ABC"}, format="json")
     assert resp.status_code == 400
     assert calls == ["123ABC"]
-    assert resp.json()["status"] == "invalid"
+    data = resp.json()
+    assert data["status"] == "invalid"
+    assert data["meta"]["retry"] == {
+        "tentativas_execucao": 1,
+        "retry_acionado": False,
+        "recuperado_por_retry": False,
+        "status_primeira_tentativa": "invalid",
+        "status_final": "invalid",
+    }
 
 
 def test_consulta_single_not_found_returns_200(client, monkeypatch):
@@ -405,7 +440,7 @@ def test_consulta_batch_partial_success_returns_207(client, monkeypatch):
     assert {item["status"] for item in data["resultados"]} == {"ok", "error"}
 
 
-def test_consulta_batch_retries_only_error_items_once(client, monkeypatch):
+def test_consulta_batch_retries_only_error_items_once(client, monkeypatch, caplog):
     calls = []
 
     def fake_run_batch(itens, incluir_base64):
@@ -441,6 +476,7 @@ def test_consulta_batch_retries_only_error_items_once(client, monkeypatch):
         return {"resultados": saida, "meta_execucao": {"total_consultas": len(itens)}}
 
     monkeypatch.setattr("api.views._run_batch", fake_run_batch)
+    caplog.set_level(logging.INFO, logger="api.views")
     payload = {"consultas": ["A", "B", "123ABC"], "refinar_busca": False}
     resp = client.post("/api/consulta/", data=payload, format="json")
     assert resp.status_code == 207
@@ -448,4 +484,51 @@ def test_consulta_batch_retries_only_error_items_once(client, monkeypatch):
 
     data = resp.json()
     assert data["meta_execucao"]["total_consultas"] == 3
+    assert data["meta_execucao"]["retry"] == {
+        "itens_com_retry": 1,
+        "itens_recuperados": 1,
+        "itens_erro_final": 0,
+        "indices_entrada_retentados": [1],
+    }
     assert [item["status"] for item in data["resultados"]] == ["ok", "ok", "invalid"]
+    assert data["resultados"][0]["resultado"]["meta"]["retry"] == {
+        "tentativas_execucao": 1,
+        "retry_acionado": False,
+        "recuperado_por_retry": False,
+        "status_primeira_tentativa": "ok",
+        "status_final": "ok",
+    }
+    assert data["resultados"][1]["resultado"]["meta"]["retry"] == {
+        "tentativas_execucao": 2,
+        "retry_acionado": True,
+        "recuperado_por_retry": True,
+        "status_primeira_tentativa": "error",
+        "status_final": "ok",
+    }
+    assert data["resultados"][2]["resultado"]["meta"]["retry"] == {
+        "tentativas_execucao": 1,
+        "retry_acionado": False,
+        "recuperado_por_retry": False,
+        "status_primeira_tentativa": "invalid",
+        "status_final": "invalid",
+    }
+
+    events = [json.loads(record.message) for record in caplog.records if record.name == "api.views"]
+    assert any(
+        event["event"] == "api_batch_retry_acionado"
+        and event["indices_entrada"] == [1]
+        for event in events
+    )
+    assert any(
+        event["event"] == "api_batch_retry_item_finalizado"
+        and event["indice_entrada"] == 1
+        and event["recuperado_por_retry"] is True
+        and event["status_final"] == "ok"
+        for event in events
+    )
+    assert any(
+        event["event"] == "api_batch_retry_finalizado"
+        and event["itens_recuperados"] == 1
+        and event["itens_erro_final"] == 0
+        for event in events
+    )

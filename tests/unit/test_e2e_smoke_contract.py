@@ -15,6 +15,22 @@ def _batch_ok_result(consulta: str) -> dict:
     }
 
 
+def _batch_ok_result_with_retry(consulta: str, *, recuperado_por_retry: bool) -> dict:
+    return {
+        **_batch_ok_result(consulta),
+        "meta": {
+            **_batch_ok_result(consulta)["meta"],
+            "retry": {
+                "tentativas_execucao": 2 if recuperado_por_retry else 1,
+                "retry_acionado": recuperado_por_retry,
+                "recuperado_por_retry": recuperado_por_retry,
+                "status_primeira_tentativa": "error" if recuperado_por_retry else "ok",
+                "status_final": "ok",
+            },
+        },
+    }
+
+
 @pytest.mark.parametrize(
     ("status_code", "body"),
     [
@@ -89,17 +105,46 @@ def test_summarize_batch_statuses_counts_success_and_errors():
     resumo = _summarize_batch_statuses(
         {
             "resultados": [
-                {"consulta": "A", "status": "ok", "resultado": _batch_ok_result("A")},
+                {"consulta": "A", "status": "ok", "resultado": _batch_ok_result_with_retry("A", recuperado_por_retry=False)},
                 {"consulta": "B", "status": "not_found", "resultado": {**_batch_ok_result("B"), "status": "not_found"}},
-                {"consulta": "C", "status": "error", "resultado": {"status": "error", "error": "falha"}},
+                {
+                    "consulta": "C",
+                    "status": "ok",
+                    "resultado": _batch_ok_result_with_retry("C", recuperado_por_retry=True),
+                },
+                {
+                    "consulta": "D",
+                    "status": "error",
+                    "resultado": {
+                        "status": "error",
+                        "error": "falha",
+                        "meta": {
+                            "retry": {
+                                "tentativas_execucao": 2,
+                                "retry_acionado": True,
+                                "recuperado_por_retry": False,
+                                "status_primeira_tentativa": "error",
+                                "status_final": "error",
+                            }
+                        },
+                    },
+                },
             ]
         }
     )
 
-    assert resumo["total"] == 3
-    assert resumo["success_count"] == 2
+    assert resumo["total"] == 4
+    assert resumo["success_count"] == 3
     assert resumo["counts"]["error"] == 1
-    assert resumo["success_rate"] == pytest.approx(2 / 3)
+    assert resumo["success_rate"] == pytest.approx(3 / 4)
+    assert resumo["success_rate_basis"] == "final_status_after_retry"
+    assert resumo["retry"] == {
+        "itens_com_retry": 2,
+        "recuperados_por_retry": 1,
+        "erro_final_apos_retry": 1,
+        "sucesso_sem_retry": 2,
+        "sucesso_com_retry": 1,
+    }
 
 
 def test_summarize_parallel_batch_results_aggregates_multiple_responses():
@@ -109,8 +154,28 @@ def test_summarize_parallel_batch_results_aggregates_multiple_responses():
                 207,
                 {
                     "resultados": [
-                        {"consulta": "A", "status": "ok", "resultado": _batch_ok_result("A")},
-                        {"consulta": "B", "status": "error", "resultado": {"status": "error", "error": "falha"}},
+                        {
+                            "consulta": "A",
+                            "status": "ok",
+                            "resultado": _batch_ok_result_with_retry("A", recuperado_por_retry=True),
+                        },
+                        {
+                            "consulta": "B",
+                            "status": "error",
+                            "resultado": {
+                                "status": "error",
+                                "error": "falha",
+                                "meta": {
+                                    "retry": {
+                                        "tentativas_execucao": 2,
+                                        "retry_acionado": True,
+                                        "recuperado_por_retry": False,
+                                        "status_primeira_tentativa": "error",
+                                        "status_final": "error",
+                                    }
+                                },
+                            },
+                        },
                     ]
                 },
             ),
@@ -131,3 +196,11 @@ def test_summarize_parallel_batch_results_aggregates_multiple_responses():
     assert resumo["counts"]["error"] == 1
     assert resumo["response_codes"] == {"207": 1, "200": 1}
     assert resumo["success_rate"] == pytest.approx(0.75)
+    assert resumo["success_rate_basis"] == "final_status_after_retry"
+    assert resumo["retry"] == {
+        "itens_com_retry": 2,
+        "recuperados_por_retry": 1,
+        "erro_final_apos_retry": 1,
+        "sucesso_sem_retry": 2,
+        "sucesso_com_retry": 1,
+    }

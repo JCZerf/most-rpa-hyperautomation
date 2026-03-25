@@ -130,17 +130,53 @@ def _assert_batch_limits_meta(body: dict, expected_total: int):
     assert int(meta.get("blocos_fila", -1)) == expected_blocos
 
 
+def _batch_item_retry_meta(item: dict) -> dict:
+    resultado = (item or {}).get("resultado")
+    if not isinstance(resultado, dict):
+        return {}
+    meta = resultado.get("meta")
+    if not isinstance(meta, dict):
+        return {}
+    retry = meta.get("retry")
+    if isinstance(retry, dict):
+        return retry
+    return {}
+
+
 def _summarize_batch_statuses(body: dict) -> dict:
     resultados = body.get("resultados")
     assert isinstance(resultados, list), f"Resposta de lote sem resultados para sumarizacao: {body}"
 
     counts = {"ok": 0, "not_found": 0, "invalid": 0, "error": 0, "unknown": 0}
+    retry = {
+        "itens_com_retry": 0,
+        "recuperados_por_retry": 0,
+        "erro_final_apos_retry": 0,
+        "sucesso_sem_retry": 0,
+        "sucesso_com_retry": 0,
+    }
     for item in resultados:
         status_item = str((item or {}).get("status") or "").lower()
         if status_item in counts:
             counts[status_item] += 1
         else:
             counts["unknown"] += 1
+
+        retry_meta = _batch_item_retry_meta(item)
+        retry_acionado = bool(retry_meta.get("retry_acionado", False))
+        recuperado_por_retry = bool(retry_meta.get("recuperado_por_retry", False))
+        if retry_acionado:
+            retry["itens_com_retry"] += 1
+            if recuperado_por_retry:
+                retry["recuperados_por_retry"] += 1
+            elif status_item == "error":
+                retry["erro_final_apos_retry"] += 1
+
+        if status_item in ("ok", "not_found"):
+            if retry_acionado and recuperado_por_retry:
+                retry["sucesso_com_retry"] += 1
+            else:
+                retry["sucesso_sem_retry"] += 1
 
     total = len(resultados)
     success_count = counts["ok"] + counts["not_found"]
@@ -150,7 +186,9 @@ def _summarize_batch_statuses(body: dict) -> dict:
         "total": total,
         "success_count": success_count,
         "success_rate": success_rate,
+        "success_rate_basis": "final_status_after_retry",
         "counts": counts,
+        "retry": retry,
     }
 
 
@@ -158,6 +196,13 @@ def _summarize_parallel_batch_results(resultados: list[tuple[int, dict]]) -> dic
     total_items = 0
     success_count = 0
     counts = {"ok": 0, "not_found": 0, "invalid": 0, "error": 0, "unknown": 0}
+    retry = {
+        "itens_com_retry": 0,
+        "recuperados_por_retry": 0,
+        "erro_final_apos_retry": 0,
+        "sucesso_sem_retry": 0,
+        "sucesso_com_retry": 0,
+    }
     response_codes: dict[str, int] = {}
 
     for status_code, body in resultados:
@@ -169,13 +214,17 @@ def _summarize_parallel_batch_results(resultados: list[tuple[int, dict]]) -> dic
         success_count += resumo["success_count"]
         for key, value in resumo["counts"].items():
             counts[key] += value
+        for key, value in resumo["retry"].items():
+            retry[key] += value
 
     success_rate = (success_count / total_items) if total_items else 0.0
     return {
         "total_items": total_items,
         "success_count": success_count,
         "success_rate": success_rate,
+        "success_rate_basis": "final_status_after_retry",
         "counts": counts,
+        "retry": retry,
         "response_codes": response_codes,
     }
 
@@ -478,6 +527,9 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
         if resumo_execucao["success_rate"] < 1.0:
             warnings.warn(
                 "Lote concorrente com sucesso parcial: "
-                f"taxa={resumo_execucao['success_rate']:.2%}, resumo={resumo_execucao}",
+                f"taxa_final={resumo_execucao['success_rate']:.2%}, "
+                f"sucesso_com_retry={resumo_execucao['retry']['sucesso_com_retry']}, "
+                f"erro_final_apos_retry={resumo_execucao['retry']['erro_final_apos_retry']}, "
+                f"resumo={resumo_execucao}",
                 stacklevel=2,
             )

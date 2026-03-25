@@ -140,16 +140,134 @@ def _should_retry_result(res: Dict[str, Any]) -> bool:
     return _status_from_result(res) == "error"
 
 
+def _ensure_result_meta(res: Dict[str, Any]) -> Dict[str, Any]:
+    meta = res.get("meta")
+    if isinstance(meta, dict):
+        return meta
+    meta = {}
+    res["meta"] = meta
+    return meta
+
+
+def _annotate_result_retry_meta(
+    res: Dict[str, Any],
+    *,
+    tentativas_execucao: int,
+    retry_acionado: bool,
+    recuperado_por_retry: bool,
+    status_primeira_tentativa: str,
+) -> Dict[str, Any]:
+    meta = _ensure_result_meta(res)
+    meta["retry"] = {
+        "tentativas_execucao": max(1, int(tentativas_execucao)),
+        "retry_acionado": bool(retry_acionado),
+        "recuperado_por_retry": bool(recuperado_por_retry),
+        "status_primeira_tentativa": str(status_primeira_tentativa or "unknown"),
+        "status_final": _status_from_result(res),
+    }
+    return res
+
+
+def _result_retry_meta(res: Dict[str, Any]) -> Dict[str, Any]:
+    meta = res.get("meta")
+    if not isinstance(meta, dict):
+        return {}
+    retry = meta.get("retry")
+    if isinstance(retry, dict):
+        return retry
+    return {}
+
+
+def _annotate_batch_item_retry_meta(
+    item: Dict[str, Any],
+    *,
+    tentativas_execucao: int,
+    retry_acionado: bool,
+    recuperado_por_retry: bool,
+    status_primeira_tentativa: str,
+) -> Dict[str, Any]:
+    resultado = item.get("resultado")
+    if isinstance(resultado, dict):
+        _annotate_result_retry_meta(
+            resultado,
+            tentativas_execucao=tentativas_execucao,
+            retry_acionado=retry_acionado,
+            recuperado_por_retry=recuperado_por_retry,
+            status_primeira_tentativa=status_primeira_tentativa,
+        )
+    return item
+
+
+def _default_batch_retry_summary() -> Dict[str, Any]:
+    return {
+        "itens_com_retry": 0,
+        "itens_recuperados": 0,
+        "itens_erro_final": 0,
+        "indices_entrada_retentados": [],
+    }
+
+
+def _attach_batch_retry_summary(saida_execucao: Dict[str, Any], summary: Dict[str, Any]) -> Dict[str, Any]:
+    meta_execucao = dict(saida_execucao.get("meta_execucao") or {})
+    meta_execucao["retry"] = summary
+    saida_execucao["meta_execucao"] = meta_execucao
+    return saida_execucao
+
+
 def _run_single_with_retry(consulta_param: str, refine_param: bool, incluir_base64: bool) -> Dict[str, Any]:
     resultado = _run_single(consulta_param, refine_param, incluir_base64)
+    status_primeira_tentativa = _status_from_result(resultado)
     if MAX_ERROR_RETRY_ATTEMPTS < 1 or not _should_retry_result(resultado):
-        return resultado
+        return _annotate_result_retry_meta(
+            resultado,
+            tentativas_execucao=1,
+            retry_acionado=False,
+            recuperado_por_retry=False,
+            status_primeira_tentativa=status_primeira_tentativa,
+        )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "api_consulta_retry_acionado",
+        consulta=mascarar_identificador(str(consulta_param)),
+        refinar_busca=bool(refine_param),
+        status_primeira_tentativa=status_primeira_tentativa,
+        tentativa_extra=1,
+    )
 
     try:
-        return _run_single(consulta_param, refine_param, incluir_base64)
+        resultado_retry = _run_single(consulta_param, refine_param, incluir_base64)
     except Exception:
         logger.exception("Falha na tentativa unica de retry da consulta %s", consulta_param)
-        return resultado
+        return _annotate_result_retry_meta(
+            resultado,
+            tentativas_execucao=2,
+            retry_acionado=True,
+            recuperado_por_retry=False,
+            status_primeira_tentativa=status_primeira_tentativa,
+        )
+
+    status_final = _status_from_result(resultado_retry)
+    recuperado_por_retry = status_final != "error"
+    _annotate_result_retry_meta(
+        resultado_retry,
+        tentativas_execucao=2,
+        retry_acionado=True,
+        recuperado_por_retry=recuperado_por_retry,
+        status_primeira_tentativa=status_primeira_tentativa,
+    )
+    log_event(
+        logger,
+        logging.INFO,
+        "api_consulta_retry_finalizado",
+        consulta=mascarar_identificador(str(consulta_param)),
+        refinar_busca=bool(refine_param),
+        status_primeira_tentativa=status_primeira_tentativa,
+        status_final=status_final,
+        recuperado_por_retry=recuperado_por_retry,
+    )
+    return resultado_retry
 
 
 def _batch_item_has_error(item: Dict[str, Any]) -> bool:
@@ -197,11 +315,26 @@ def _merge_batch_retry_results(
 
 def _run_batch_with_retry(itens: List[Dict[str, Any]], incluir_base64: bool) -> Dict[str, Any]:
     saida_execucao = _run_batch(itens, incluir_base64=incluir_base64)
+    for item in saida_execucao.get("resultados", []):
+        if not isinstance(item, dict):
+            continue
+        resultado = item.get("resultado")
+        if not isinstance(resultado, dict):
+            continue
+        _annotate_batch_item_retry_meta(
+            item,
+            tentativas_execucao=1,
+            retry_acionado=False,
+            recuperado_por_retry=False,
+            status_primeira_tentativa=_status_from_result(resultado),
+        )
+
     if MAX_ERROR_RETRY_ATTEMPTS < 1:
-        return saida_execucao
+        return _attach_batch_retry_summary(saida_execucao, _default_batch_retry_summary())
 
     retry_itens: List[Dict[str, Any]] = []
     retry_indices: set[int] = set()
+    status_inicial_por_indice: Dict[int, str] = {}
     for item in saida_execucao.get("resultados", []):
         if not _batch_item_has_error(item):
             continue
@@ -210,17 +343,98 @@ def _run_batch_with_retry(itens: List[Dict[str, Any]], incluir_base64: bool) -> 
             continue
         retry_indices.add(idx)
         retry_itens.append(itens[idx])
+        resultado = item.get("resultado")
+        if isinstance(resultado, dict):
+            status_inicial_por_indice[idx] = _status_from_result(resultado)
 
     if not retry_itens:
-        return saida_execucao
+        return _attach_batch_retry_summary(saida_execucao, _default_batch_retry_summary())
+
+    log_event(
+        logger,
+        logging.INFO,
+        "api_batch_retry_acionado",
+        total_itens=len(retry_itens),
+        indices_entrada=sorted(retry_indices),
+        consultas=[mascarar_identificador(str(item.get("consulta"))) for item in retry_itens],
+        refinar_busca=[bool(item.get("refinar_busca", False)) for item in retry_itens],
+    )
 
     try:
         saida_retry = _run_batch(retry_itens, incluir_base64=incluir_base64)
     except Exception:
         logger.exception("Falha na tentativa unica de retry do lote")
-        return saida_execucao
+        summary = {
+            "itens_com_retry": len(retry_itens),
+            "itens_recuperados": 0,
+            "itens_erro_final": len(retry_itens),
+            "indices_entrada_retentados": sorted(retry_indices),
+        }
+        for item in saida_execucao.get("resultados", []):
+            if not isinstance(item, dict):
+                continue
+            idx = int(item.get("indice_entrada", -1))
+            if idx not in retry_indices:
+                continue
+            _annotate_batch_item_retry_meta(
+                item,
+                tentativas_execucao=2,
+                retry_acionado=True,
+                recuperado_por_retry=False,
+                status_primeira_tentativa=status_inicial_por_indice.get(idx, "error"),
+            )
+        return _attach_batch_retry_summary(saida_execucao, summary)
 
-    return _merge_batch_retry_results(saida_execucao, saida_retry)
+    saida_final = _merge_batch_retry_results(saida_execucao, saida_retry)
+    summary = {
+        "itens_com_retry": len(retry_itens),
+        "itens_recuperados": 0,
+        "itens_erro_final": 0,
+        "indices_entrada_retentados": sorted(retry_indices),
+    }
+    for item in saida_final.get("resultados", []):
+        if not isinstance(item, dict):
+            continue
+        idx = int(item.get("indice_entrada", -1))
+        if idx not in retry_indices:
+            continue
+        resultado = item.get("resultado")
+        status_inicial = status_inicial_por_indice.get(idx, "error")
+        status_final = _status_from_result(resultado) if isinstance(resultado, dict) else "error"
+        recuperado_por_retry = status_final != "error"
+        if recuperado_por_retry:
+            summary["itens_recuperados"] += 1
+        else:
+            summary["itens_erro_final"] += 1
+        _annotate_batch_item_retry_meta(
+            item,
+            tentativas_execucao=2,
+            retry_acionado=True,
+            recuperado_por_retry=recuperado_por_retry,
+            status_primeira_tentativa=status_inicial,
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "api_batch_retry_item_finalizado",
+            consulta=mascarar_identificador(str(item.get("consulta"))),
+            indice_entrada=idx,
+            refinar_busca=bool(item.get("refinar_busca", False)),
+            status_primeira_tentativa=status_inicial,
+            status_final=status_final,
+            recuperado_por_retry=recuperado_por_retry,
+            id_consulta=(resultado or {}).get("id_consulta", "-") if isinstance(resultado, dict) else "-",
+        )
+    log_event(
+        logger,
+        logging.INFO,
+        "api_batch_retry_finalizado",
+        total_itens=summary["itens_com_retry"],
+        itens_recuperados=summary["itens_recuperados"],
+        itens_erro_final=summary["itens_erro_final"],
+        indices_entrada=summary["indices_entrada_retentados"],
+    )
+    return _attach_batch_retry_summary(saida_final, summary)
 
 
 def _single_http_status_from_result(res: Dict[str, Any]) -> int:
@@ -457,6 +671,7 @@ def consulta(request: Request):
             c = consultas[idx]
             res = item.get("resultado") or {"status": "error", "error": "Resultado ausente"}
             status_item = _status_from_result(res)
+            retry_meta = _result_retry_meta(res)
             _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=float(item.get("duracao_segundos", 0.0)))
             log_event(
                 logger,
@@ -465,6 +680,9 @@ def consulta(request: Request):
                 consulta=mascarar_identificador(str(c)),
                 status=status_item,
                 id_consulta=res.get("id_consulta", "-"),
+                tentativas_execucao=retry_meta.get("tentativas_execucao", 1),
+                retry_acionado=retry_meta.get("retry_acionado", False),
+                recuperado_por_retry=retry_meta.get("recuperado_por_retry", False),
             )
             resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
         for idx, item in enumerate(resultados):
@@ -525,6 +743,7 @@ def consulta(request: Request):
             c = itens[idx].get("consulta") or itens[idx].get("alvo")
             res = item.get("resultado") or {"status": "error", "error": "Resultado ausente"}
             status_item = _status_from_result(res)
+            retry_meta = _result_retry_meta(res)
             _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=float(item.get("duracao_segundos", 0.0)))
             log_event(
                 logger,
@@ -533,6 +752,9 @@ def consulta(request: Request):
                 consulta=mascarar_identificador(str(c)),
                 status=status_item,
                 id_consulta=res.get("id_consulta", "-"),
+                tentativas_execucao=retry_meta.get("tentativas_execucao", 1),
+                retry_acionado=retry_meta.get("retry_acionado", False),
+                recuperado_por_retry=retry_meta.get("recuperado_por_retry", False),
             )
             resultados[idx] = {"consulta": c, "status": status_item, "resultado": res}
 
@@ -572,6 +794,7 @@ def consulta(request: Request):
         item_start = time.monotonic()
         resultado = _run_single_with_retry(consulta_param, refine_param, incluir_base64)
         status_item = _status_from_result(resultado)
+        retry_meta = _result_retry_meta(resultado)
         _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - item_start)
         log_event(
             logger,
@@ -580,6 +803,9 @@ def consulta(request: Request):
             consulta=mascarar_identificador(str(consulta_param)),
             status=status_item,
             id_consulta=resultado.get("id_consulta", "-"),
+            tentativas_execucao=retry_meta.get("tentativas_execucao", 1),
+            retry_acionado=retry_meta.get("retry_acionado", False),
+            recuperado_por_retry=retry_meta.get("recuperado_por_retry", False),
         )
         API_CONSULTA_DURATION_SECONDS.labels(mode=mode).observe(max(0.0, time.monotonic() - request_start))
         return JsonResponse(resultado, safe=False, status=_single_http_status_from_result(resultado))
