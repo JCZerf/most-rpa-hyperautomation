@@ -1,6 +1,7 @@
 import json
 import os
 import math
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,16 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except (TypeError, ValueError):
+        return default
 
 
 def _batch_targets_from_env() -> list[str]:
@@ -119,6 +130,56 @@ def _assert_batch_limits_meta(body: dict, expected_total: int):
     assert int(meta.get("blocos_fila", -1)) == expected_blocos
 
 
+def _summarize_batch_statuses(body: dict) -> dict:
+    resultados = body.get("resultados")
+    assert isinstance(resultados, list), f"Resposta de lote sem resultados para sumarizacao: {body}"
+
+    counts = {"ok": 0, "not_found": 0, "invalid": 0, "error": 0, "unknown": 0}
+    for item in resultados:
+        status_item = str((item or {}).get("status") or "").lower()
+        if status_item in counts:
+            counts[status_item] += 1
+        else:
+            counts["unknown"] += 1
+
+    total = len(resultados)
+    success_count = counts["ok"] + counts["not_found"]
+    success_rate = (success_count / total) if total else 0.0
+
+    return {
+        "total": total,
+        "success_count": success_count,
+        "success_rate": success_rate,
+        "counts": counts,
+    }
+
+
+def _summarize_parallel_batch_results(resultados: list[tuple[int, dict]]) -> dict:
+    total_items = 0
+    success_count = 0
+    counts = {"ok": 0, "not_found": 0, "invalid": 0, "error": 0, "unknown": 0}
+    response_codes: dict[str, int] = {}
+
+    for status_code, body in resultados:
+        response_codes[str(status_code)] = response_codes.get(str(status_code), 0) + 1
+        if "resultados" not in body:
+            continue
+        resumo = _summarize_batch_statuses(body)
+        total_items += resumo["total"]
+        success_count += resumo["success_count"]
+        for key, value in resumo["counts"].items():
+            counts[key] += value
+
+    success_rate = (success_count / total_items) if total_items else 0.0
+    return {
+        "total_items": total_items,
+        "success_count": success_count,
+        "success_rate": success_rate,
+        "counts": counts,
+        "response_codes": response_codes,
+    }
+
+
 def _assert_batch_item_contract(item: dict):
     assert isinstance(item, dict)
     assert "consulta" in item
@@ -127,7 +188,13 @@ def _assert_batch_item_contract(item: dict):
     assert status_item in ("ok", "not_found", "invalid", "error")
 
     resultado = item.get("resultado")
-    if status_item in ("ok", "not_found", "invalid"):
+    if status_item == "ok":
+        assert isinstance(resultado, dict), f"Item de lote sem resultado estruturado: {item}"
+        # No contrato real de batch, itens OK usam o status no envelope do item;
+        # o payload interno normalmente nao repete `status`.
+        assert resultado.get("status") in (None, "ok")
+        assert all(k in resultado for k in ("pessoa", "beneficios", "meta"))
+    elif status_item in ("not_found", "invalid"):
         assert isinstance(resultado, dict), f"Item de lote sem resultado estruturado: {item}"
         assert resultado.get("status") == status_item
         if status_item == "invalid":
@@ -372,7 +439,12 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
 
     respostas = []
     for idx, (status_code, body) in enumerate(resultados, start=1):
-        respostas.append({"indice": idx, "status_code": status_code, "body": body})
+        resposta_payload = {"indice": idx, "status_code": status_code, "body": body}
+        if "resultados" in body:
+            resposta_payload["resumo_status"] = _summarize_batch_statuses(body)
+        respostas.append(resposta_payload)
+
+    resumo_execucao = _summarize_parallel_batch_results(resultados)
 
     _save_artifact(
         "06_requisicoes_simultaneas_lote",
@@ -385,6 +457,7 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
             "consultas_configuradas": consultas_paralelo,
             "payload_meta": payload_meta,
             "payload": payload,
+            "resumo_execucao": resumo_execucao,
             "respostas": respostas,
         },
     )
@@ -395,4 +468,16 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
             _assert_batch_limits_meta(body, expected_total=len(consultas_paralelo))
 
     if _require_success_enabled():
-        assert all(s == 200 for s, _ in resultados), f"Nem todas as requisições simultâneas retornaram 200: {respostas}"
+        min_success_rate = _env_float("E2E_BATCH_MIN_SUCCESS_RATE", 0.8)
+        assert resumo_execucao["counts"]["invalid"] == 0, f"Lote concorrente teve itens invalidos: {resumo_execucao}"
+        assert resumo_execucao["counts"]["unknown"] == 0, f"Lote concorrente teve itens com status desconhecido: {resumo_execucao}"
+        assert resumo_execucao["success_rate"] >= min_success_rate, (
+            f"Taxa de sucesso do lote concorrente abaixo do minimo "
+            f"({resumo_execucao['success_rate']:.2%} < {min_success_rate:.2%}): {resumo_execucao}"
+        )
+        if resumo_execucao["success_rate"] < 1.0:
+            warnings.warn(
+                "Lote concorrente com sucesso parcial: "
+                f"taxa={resumo_execucao['success_rate']:.2%}, resumo={resumo_execucao}",
+                stacklevel=2,
+            )

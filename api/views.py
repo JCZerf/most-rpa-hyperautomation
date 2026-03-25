@@ -33,6 +33,7 @@ from .metrics import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_INCLUDE_BASE64 = env_bool("BOT_INCLUDE_BASE64_DEFAULT", True)
+MAX_ERROR_RETRY_ATTEMPTS = 1
 SWAGGER_EXAMPLE_CONSULTAS = [
     "A DILA DA SILVA BRITO LIMA",
     "BA N TCHI OLIVE CONFORTE N DAH KOUAGOU",
@@ -133,6 +134,93 @@ def _status_from_result(res: Dict[str, Any]) -> str:
     if res.get("status") == "not_found":
         return "not_found"
     return "ok"
+
+
+def _should_retry_result(res: Dict[str, Any]) -> bool:
+    return _status_from_result(res) == "error"
+
+
+def _run_single_with_retry(consulta_param: str, refine_param: bool, incluir_base64: bool) -> Dict[str, Any]:
+    resultado = _run_single(consulta_param, refine_param, incluir_base64)
+    if MAX_ERROR_RETRY_ATTEMPTS < 1 or not _should_retry_result(resultado):
+        return resultado
+
+    try:
+        return _run_single(consulta_param, refine_param, incluir_base64)
+    except Exception:
+        logger.exception("Falha na tentativa unica de retry da consulta %s", consulta_param)
+        return resultado
+
+
+def _batch_item_has_error(item: Dict[str, Any]) -> bool:
+    if not isinstance(item, dict):
+        return False
+    resultado = item.get("resultado")
+    return isinstance(resultado, dict) and _should_retry_result(resultado)
+
+
+def _merge_batch_retry_results(
+    saida_inicial: Dict[str, Any],
+    saida_retry: Dict[str, Any],
+) -> Dict[str, Any]:
+    retry_por_indice: Dict[int, Dict[str, Any]] = {}
+    for item in saida_retry.get("resultados", []):
+        if not isinstance(item, dict):
+            continue
+        idx = int(item.get("indice_entrada", -1))
+        if idx >= 0:
+            retry_por_indice[idx] = item
+
+    resultados_mesclados: List[Dict[str, Any]] = []
+    for item in saida_inicial.get("resultados", []):
+        if not isinstance(item, dict):
+            resultados_mesclados.append(item)
+            continue
+
+        idx = int(item.get("indice_entrada", -1))
+        retry_item = retry_por_indice.get(idx)
+        if retry_item is None:
+            resultados_mesclados.append(item)
+            continue
+
+        mesclado = dict(retry_item)
+        mesclado["duracao_segundos"] = max(
+            0.0,
+            float(item.get("duracao_segundos", 0.0)) + float(retry_item.get("duracao_segundos", 0.0)),
+        )
+        resultados_mesclados.append(mesclado)
+
+    saida_final = dict(saida_inicial)
+    saida_final["resultados"] = resultados_mesclados
+    return saida_final
+
+
+def _run_batch_with_retry(itens: List[Dict[str, Any]], incluir_base64: bool) -> Dict[str, Any]:
+    saida_execucao = _run_batch(itens, incluir_base64=incluir_base64)
+    if MAX_ERROR_RETRY_ATTEMPTS < 1:
+        return saida_execucao
+
+    retry_itens: List[Dict[str, Any]] = []
+    retry_indices: set[int] = set()
+    for item in saida_execucao.get("resultados", []):
+        if not _batch_item_has_error(item):
+            continue
+        idx = int(item.get("indice_entrada", -1))
+        if idx < 0 or idx >= len(itens) or idx in retry_indices:
+            continue
+        retry_indices.add(idx)
+        retry_itens.append(itens[idx])
+
+    if not retry_itens:
+        return saida_execucao
+
+    try:
+        saida_retry = _run_batch(retry_itens, incluir_base64=incluir_base64)
+    except Exception:
+        logger.exception("Falha na tentativa unica de retry do lote")
+        return saida_execucao
+
+    return _merge_batch_retry_results(saida_execucao, saida_retry)
 
 
 def _single_http_status_from_result(res: Dict[str, Any]) -> int:
@@ -360,7 +448,7 @@ def consulta(request: Request):
             {"indice_entrada": idx, "consulta": str(c), "refinar_busca": refine_default}
             for idx, c in enumerate(consultas)
         ]
-        saida_execucao = _run_batch(itens_execucao, incluir_base64=incluir_base64)
+        saida_execucao = _run_batch_with_retry(itens_execucao, incluir_base64=incluir_base64)
         resultados = [None] * len(consultas)
         for item in saida_execucao.get("resultados", []):
             idx = int(item.get("indice_entrada", -1))
@@ -428,7 +516,7 @@ def consulta(request: Request):
 
         saida_execucao = {"resultados": [], "meta_execucao": {}}
         if itens_execucao:
-            saida_execucao = _run_batch(itens_execucao, incluir_base64=incluir_base64)
+            saida_execucao = _run_batch_with_retry(itens_execucao, incluir_base64=incluir_base64)
 
         for item in saida_execucao.get("resultados", []):
             idx = int(item.get("indice_entrada", -1))
@@ -482,7 +570,7 @@ def consulta(request: Request):
     )
     try:
         item_start = time.monotonic()
-        resultado = _run_single(consulta_param, refine_param, incluir_base64)
+        resultado = _run_single_with_retry(consulta_param, refine_param, incluir_base64)
         status_item = _status_from_result(resultado)
         _observe_item_metrics(mode=mode, status_item=status_item, elapsed_seconds=time.monotonic() - item_start)
         log_event(

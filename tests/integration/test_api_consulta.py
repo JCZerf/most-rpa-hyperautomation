@@ -334,6 +334,36 @@ def test_consulta_single_error_from_bot_returns_502(client, monkeypatch):
     assert resp.json()["status"] == "error"
 
 
+def test_consulta_single_error_retries_once_and_recovers(client, monkeypatch):
+    calls = []
+
+    def fake_run_single(consulta_param, refine_param, incluir_base64):
+        calls.append(consulta_param)
+        if len(calls) == 1:
+            return {"status": "error", "error": "falha no portal"}
+        return {"status": "ok", "pessoa": {"consulta": consulta_param}, "beneficios": [], "meta": {}}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "FULANO TESTE"}, format="json")
+    assert resp.status_code == 200
+    assert calls == ["FULANO TESTE", "FULANO TESTE"]
+    assert resp.json()["status"] == "ok"
+
+
+def test_consulta_single_invalid_does_not_retry(client, monkeypatch):
+    calls = []
+
+    def fake_run_single(consulta_param, refine_param, incluir_base64):
+        calls.append(consulta_param)
+        return {"status": "invalid", "error": "entrada invalida", "consulta": consulta_param}
+
+    monkeypatch.setattr("api.views._run_single", fake_run_single)
+    resp = client.post("/api/consulta/", data={"consulta": "123ABC"}, format="json")
+    assert resp.status_code == 400
+    assert calls == ["123ABC"]
+    assert resp.json()["status"] == "invalid"
+
+
 def test_consulta_single_not_found_returns_200(client, monkeypatch):
     monkeypatch.setattr(
         "api.views._run_single",
@@ -373,3 +403,49 @@ def test_consulta_batch_partial_success_returns_207(client, monkeypatch):
     assert resp.status_code == 207
     data = resp.json()
     assert {item["status"] for item in data["resultados"]} == {"ok", "error"}
+
+
+def test_consulta_batch_retries_only_error_items_once(client, monkeypatch):
+    calls = []
+
+    def fake_run_batch(itens, incluir_base64):
+        consultas = [item["consulta"] for item in itens]
+        calls.append(consultas)
+
+        saida = []
+        for item in itens:
+            consulta = item["consulta"]
+            if consulta == "A":
+                resultado = {"status": "ok", "pessoa": {"nome": consulta}, "beneficios": [], "meta": {}}
+            elif consulta == "B" and len(calls) == 1:
+                resultado = {"status": "error", "error": "falha transitória"}
+            elif consulta == "B":
+                resultado = {"status": "ok", "pessoa": {"nome": consulta}, "beneficios": [], "meta": {}}
+            else:
+                resultado = {
+                    "status": "invalid",
+                    "error": "entrada invalida",
+                    "pessoa": {"consulta": consulta, "nome": "N/A", "cpf": "N/A", "localidade": "N/A"},
+                    "beneficios": [],
+                    "meta": {},
+                }
+
+            saida.append(
+                {
+                    "indice_entrada": item["indice_entrada"],
+                    "consulta": consulta,
+                    "duracao_segundos": 0.01,
+                    "resultado": resultado,
+                }
+            )
+        return {"resultados": saida, "meta_execucao": {"total_consultas": len(itens)}}
+
+    monkeypatch.setattr("api.views._run_batch", fake_run_batch)
+    payload = {"consultas": ["A", "B", "123ABC"], "refinar_busca": False}
+    resp = client.post("/api/consulta/", data=payload, format="json")
+    assert resp.status_code == 207
+    assert calls == [["A", "B", "123ABC"], ["B"]]
+
+    data = resp.json()
+    assert data["meta_execucao"]["total_consultas"] == 3
+    assert [item["status"] for item in data["resultados"]] == ["ok", "ok", "invalid"]
