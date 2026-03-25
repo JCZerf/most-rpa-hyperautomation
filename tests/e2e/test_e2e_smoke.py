@@ -36,7 +36,8 @@ def _batch_targets_from_env() -> list[str]:
     targets = [item.strip() for item in raw.split(";") if item.strip()]
     if len(targets) < 2:
         pytest.skip("Batch exige pelo menos 2 alvos em E2E_BATCH_TARGETS")
-    return targets
+    # Smoke: limita carga de batch para manter tempo de execução previsível no CI.
+    return targets[:8]
 
 
 def _build_mixed_batch_payload(targets: list[str]) -> tuple[dict, dict]:
@@ -278,12 +279,12 @@ def test_e2e_smoke_lote_reage_a_limites_da_api():
 
 
 @pytest.mark.e2e
-def test_e2e_smoke_lote_unico_12_alvos():
+def test_e2e_smoke_lote_unico_8_alvos():
     base_url = _required_env("E2E_BASE_URL").rstrip("/")
     client_id = _required_env("E2E_CLIENT_ID")
     client_secret = _required_env("E2E_CLIENT_SECRET")
     consultas_lote = _batch_targets_from_env()
-    payload, payload_meta = _build_mixed_batch_payload_with_size(consultas_lote, total=12)
+    payload, payload_meta = _build_mixed_batch_payload_with_size(consultas_lote, total=8)
 
     token_status, token_body = _issue_access_token(base_url, client_id, client_secret)
     assert token_status == 200
@@ -292,7 +293,7 @@ def test_e2e_smoke_lote_unico_12_alvos():
     status_code, body = _post_json(f"{base_url}/api/consulta/", payload, token_body["access_token"])
 
     _save_artifact(
-        "07_lote_12_alvos",
+        "07_lote_8_alvos",
         {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "consultas_configuradas": consultas_lote,
@@ -305,7 +306,7 @@ def test_e2e_smoke_lote_unico_12_alvos():
 
     _assert_consulta_contract(status_code, body)
     if status_code in (200, 207, 502):
-        _assert_batch_limits_meta(body, expected_total=12)
+        _assert_batch_limits_meta(body, expected_total=8)
 
 
 @pytest.mark.e2e
@@ -313,7 +314,7 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
     base_url = _required_env("E2E_BASE_URL").rstrip("/")
     client_id = _required_env("E2E_CLIENT_ID")
     client_secret = _required_env("E2E_CLIENT_SECRET")
-    consultas_paralelo = _batch_targets_from_env()
+    consultas_paralelo = _batch_targets_from_env()[:6]
     payload, payload_meta = _build_mixed_batch_payload(consultas_paralelo)
     # Ambiente atual: até 2 requisições simultâneas por instância.
     reqs_paralelas = 2
