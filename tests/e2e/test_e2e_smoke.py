@@ -119,15 +119,50 @@ def _assert_batch_limits_meta(body: dict, expected_total: int):
     assert int(meta.get("blocos_fila", -1)) == expected_blocos
 
 
+def _assert_batch_item_contract(item: dict):
+    assert isinstance(item, dict)
+    assert "consulta" in item
+
+    status_item = item.get("status")
+    assert status_item in ("ok", "not_found", "invalid", "error")
+
+    resultado = item.get("resultado")
+    if status_item in ("ok", "not_found", "invalid"):
+        assert isinstance(resultado, dict), f"Item de lote sem resultado estruturado: {item}"
+        assert resultado.get("status") == status_item
+        if status_item == "invalid":
+            assert "error" in resultado
+        else:
+            assert all(k in resultado for k in ("pessoa", "beneficios", "meta"))
+    else:
+        assert ("error" in item) or isinstance(resultado, dict), f"Item de lote com erro sem detalhe: {item}"
+        if isinstance(resultado, dict):
+            assert resultado.get("status") == "error"
+            assert "error" in resultado
+
+
+def _assert_batch_consulta_contract(status_code: int, body: dict):
+    assert status_code in (200, 207, 400, 502)
+    resultados = body.get("resultados")
+    assert isinstance(resultados, list), f"Resposta de lote sem resultados: {body}"
+    meta = body.get("meta_execucao")
+    assert isinstance(meta, dict), f"Resposta de lote sem meta_execucao: {body}"
+    for item in resultados:
+        _assert_batch_item_contract(item)
+
+
 def _assert_consulta_contract(status_code: int, body: dict):
     assert status_code in (200, 207, 400, 401, 403, 500, 502)
     assert isinstance(body, dict)
 
+    if "resultados" in body:
+        _assert_batch_consulta_contract(status_code, body)
+        return
+
     if status_code == 200:
         # Single: pessoa/beneficios/meta; Batch: resultados
-        assert ("resultados" in body) or (
-            all(k in body for k in ("pessoa", "beneficios", "meta"))
-            or (body.get("status") == "error" and "error" in body)
+        assert all(k in body for k in ("pessoa", "beneficios", "meta")) or (
+            body.get("status") == "error" and "error" in body
         )
     else:
         # Em 400, a API pode devolver status=invalid (erro de validação de entrada)
@@ -274,7 +309,7 @@ def test_e2e_smoke_lote_reage_a_limites_da_api():
     )
 
     _assert_consulta_contract(status_code, body)
-    if status_code in (200, 207, 502):
+    if "resultados" in body:
         _assert_batch_limits_meta(body, expected_total=len(consultas_lote))
 
 
@@ -305,7 +340,7 @@ def test_e2e_smoke_lote_unico_8_alvos():
     )
 
     _assert_consulta_contract(status_code, body)
-    if status_code in (200, 207, 502):
+    if "resultados" in body:
         _assert_batch_limits_meta(body, expected_total=8)
 
 
@@ -337,9 +372,6 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
 
     respostas = []
     for idx, (status_code, body) in enumerate(resultados, start=1):
-        _assert_consulta_contract(status_code, body)
-        if status_code in (200, 207, 502):
-            _assert_batch_limits_meta(body, expected_total=len(consultas_paralelo))
         respostas.append({"indice": idx, "status_code": status_code, "body": body})
 
     _save_artifact(
@@ -356,6 +388,11 @@ def test_e2e_smoke_requisicoes_simultaneas_com_lotes():
             "respostas": respostas,
         },
     )
+
+    for status_code, body in resultados:
+        _assert_consulta_contract(status_code, body)
+        if "resultados" in body:
+            _assert_batch_limits_meta(body, expected_total=len(consultas_paralelo))
 
     if _require_success_enabled():
         assert all(s == 200 for s, _ in resultados), f"Nem todas as requisições simultâneas retornaram 200: {respostas}"
